@@ -29,6 +29,48 @@ async function alchemyFetch<T>(url: string): Promise<T | null> {
   }
 }
 
+// Cache slug → contract address so we don't re-search on every poll
+const slugCache = new Map<string, string>();
+
+function isContractAddress(value: string): boolean {
+  return /^0x[0-9a-fA-F]{40}$/.test(value);
+}
+
+/**
+ * Resolve an OpenSea-style slug (e.g. "kaito-genesis") to an Ethereum
+ * contract address using Alchemy's searchContractMetadata endpoint.
+ * Returns null if nothing useful is found.
+ */
+async function resolveSlugToContract(slug: string, chain: string, apiKey: string): Promise<string | null> {
+  if (slugCache.has(slug)) return slugCache.get(slug)!;
+
+  // Convert slug to a human-readable query: "kaito-genesis" → "kaito genesis"
+  const query = slug.replace(/-/g, ' ');
+  const base  = baseUrl(chain, apiKey);
+  const data  = await alchemyFetch<any>(
+    `${base}/searchContractMetadata?query=${encodeURIComponent(query)}`
+  );
+
+  const contracts: any[] = data?.contracts ?? [];
+  if (!contracts.length) {
+    logger.warn({ slug }, 'Alchemy: no contracts found for slug');
+    return null;
+  }
+
+  // Prefer a contract whose slug/name closely matches
+  const slugNorm = slug.toLowerCase().replace(/-/g, '');
+  const best = contracts.find((c: any) => {
+    const name = (c.name ?? '').toLowerCase().replace(/\s/g, '');
+    const sym  = (c.symbol ?? '').toLowerCase();
+    return name.includes(slugNorm) || slugNorm.includes(name) || sym === slugNorm;
+  }) ?? contracts[0];
+
+  const address: string = best.address;
+  slugCache.set(slug, address);
+  logger.info({ slug, address }, 'Alchemy: resolved slug to contract');
+  return address;
+}
+
 export class AlchemyProvider implements NftDataProvider {
   name = 'Alchemy';
 
@@ -38,9 +80,17 @@ export class AlchemyProvider implements NftDataProvider {
 
   // ─── Collection ───────────────────────────────────────────────────────────
 
-  async getCollectionData(contractAddress: string, chain = 'ethereum'): Promise<CollectionData | null> {
-    const key = config.ALCHEMY_API_KEY!;
+  async getCollectionData(slugOrAddress: string, chain = 'ethereum'): Promise<CollectionData | null> {
+    const key  = config.ALCHEMY_API_KEY!;
     const base = baseUrl(chain, key);
+
+    // Resolve slug → contract address if needed
+    let contractAddress = slugOrAddress;
+    if (!isContractAddress(slugOrAddress)) {
+      const resolved = await resolveSlugToContract(slugOrAddress, chain, key);
+      if (!resolved) return null;
+      contractAddress = resolved;
+    }
 
     const [meta, floor] = await Promise.all([
       alchemyFetch<any>(`${base}/getContractMetadata?contractAddress=${contractAddress}`),
@@ -49,26 +99,24 @@ export class AlchemyProvider implements NftDataProvider {
 
     if (!meta) return null;
 
-    const osFloor   = floor?.openSea?.floorPrice   ?? null;
-    const looksFloor = floor?.looksRare?.floorPrice ?? null;
-    const floorPrice = osFloor ?? looksFloor ?? null;
+    const floorPrice = floor?.openSea?.floorPrice ?? floor?.looksRare?.floorPrice ?? null;
 
     return {
-      name:             meta.name ?? meta.contractDeployer ?? contractAddress,
-      slug:             contractAddress,
+      name:            meta.name ?? meta.openSeaMetadata?.collectionName ?? contractAddress,
+      slug:            slugOrAddress,
       chain,
       contractAddress,
       floorPrice,
-      volume24h:        floor?.openSea?.collectionUrl ? null : null, // not available from this endpoint
-      sales24h:         null,
-      floorChange24h:   null,
-      volumeChange24h:  null,
-      listingsCount:    null,
-      holdersCount:     null,
-      totalSupply:      meta.totalSupply ? Number(meta.totalSupply) : null,
-      imageUrl:         meta.openSeaMetadata?.imageUrl ?? undefined,
-      description:      meta.openSeaMetadata?.description ?? undefined,
-      updatedAt:        new Date(),
+      volume24h:       null,
+      sales24h:        null,
+      floorChange24h:  null,
+      volumeChange24h: null,
+      listingsCount:   null,
+      holdersCount:    null,
+      totalSupply:     meta.totalSupply ? Number(meta.totalSupply) : null,
+      imageUrl:        meta.openSeaMetadata?.imageUrl ?? undefined,
+      description:     meta.openSeaMetadata?.description ?? undefined,
+      updatedAt:       new Date(),
     };
   }
 
@@ -85,9 +133,7 @@ export class AlchemyProvider implements NftDataProvider {
 
     if (!nft) return null;
 
-    const floorPrice  = floor?.openSea?.floorPrice ?? floor?.looksRare?.floorPrice ?? null;
-    const lastSale    = nft.contract?.openSeaMetadata?.lastIngestedAt ? null : null;
-    const ownerAddr   = nft.owners?.[0]?.ownerAddress ?? null;
+    const floorPrice = floor?.openSea?.floorPrice ?? floor?.looksRare?.floorPrice ?? null;
 
     return {
       tokenId,
@@ -95,12 +141,12 @@ export class AlchemyProvider implements NftDataProvider {
       chain,
       collectionName: nft.contract?.name ?? contractAddress,
       collectionSlug: contractAddress,
-      ownerAddress:   ownerAddr,
+      ownerAddress:   nft.owners?.[0]?.ownerAddress ?? null,
       isListed:       false,
       listingPrice:   null,
-      lastSalePrice:  lastSale,
+      lastSalePrice:  null,
       floorPrice,
-      rarityRank:     nft.rarityScore?.rankingType ? nft.rarityScore.rank ?? null : null,
+      rarityRank:     nft.rarityScore?.rank ?? null,
       tokenStandard:  nft.tokenType ?? null,
       imageUrl:       nft.image?.originalUrl ?? nft.image?.thumbnailUrl ?? undefined,
       name:           nft.name ?? `#${tokenId}`,
@@ -139,15 +185,10 @@ export class AlchemyProvider implements NftDataProvider {
 
     if (!data?.owners) return null;
 
-    const topHolders = (data.owners as string[]).slice(0, 10).map((addr) => ({
-      address: addr,
-      balance: 1,
-    }));
-
     return {
       totalSupply:   data.owners.length,
       uniqueHolders: data.owners.length,
-      topHolders,
+      topHolders:    (data.owners as string[]).slice(0, 10).map((addr) => ({ address: addr, balance: 1 })),
     };
   }
 
@@ -157,7 +198,6 @@ export class AlchemyProvider implements NftDataProvider {
     const key  = config.ALCHEMY_API_KEY!;
     const base = baseUrl(chain, key);
 
-    // Alchemy paginates; fetch first page to get owner count estimate
     const data = await alchemyFetch<any>(
       `${base}/getOwnersForContract?contractAddress=${contractAddress}&withTokenBalances=false`
     );
@@ -165,14 +205,11 @@ export class AlchemyProvider implements NftDataProvider {
     if (!data?.owners) return null;
 
     const total = data.owners.length;
-    const topHolders = (data.owners as string[]).slice(0, 10).map((addr: string) => ({
-      address: addr,
-    }));
 
     return {
       uniqueHolders:      total,
       totalSupply:        total,
-      topHolders,
+      topHolders:         (data.owners as string[]).slice(0, 10).map((addr: string) => ({ address: addr })),
       top10Concentration: total > 0 ? (10 / total) * 100 : null,
       top50Concentration: total > 0 ? Math.min((50 / total) * 100, 100) : null,
       holderChange24h:    null,
