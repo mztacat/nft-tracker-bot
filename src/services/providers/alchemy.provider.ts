@@ -1,6 +1,7 @@
 import { NftDataProvider, CollectionData, AssetData, ERC721OwnerData, ERC1155HoldersData, CollectionHoldersData } from './types.js';
 import { config } from '../../config/index.js';
 import { logger } from '../../logger.js';
+import { getOpenSeaCollection, getOpenSeaStats, openSeaAvailable } from './opensea.enhancer.js';
 
 const CHAIN_HOSTS: Record<string, string> = {
   ethereum: 'eth-mainnet.g.alchemy.com',
@@ -100,10 +101,25 @@ export class AlchemyProvider implements NftDataProvider {
     const key  = config.ALCHEMY_API_KEY!;
     const base = baseUrl(chain, key);
 
-    // Resolve slug → contract address if needed
-    let contractAddress = slugOrAddress;
-    if (!isContractAddress(slugOrAddress)) {
-      const resolved = await resolveSlugToContract(slugOrAddress, chain, key);
+    // Slugs pasted from URLs can carry trailing punctuation ("onchainhoodies-")
+    const input  = slugOrAddress.trim().replace(/[-_.\s]+$/, '');
+    const isAddr = isContractAddress(input);
+
+    // If OpenSea API key is configured and we got a slug, resolve it
+    // authoritatively via OpenSea and pick up market stats at the same time.
+    let osInfo: Awaited<ReturnType<typeof getOpenSeaCollection>> = null;
+    let osStats: Awaited<ReturnType<typeof getOpenSeaStats>> = null;
+    if (!isAddr && openSeaAvailable()) {
+      [osInfo, osStats] = await Promise.all([
+        getOpenSeaCollection(input),
+        getOpenSeaStats(input),
+      ]);
+    }
+
+    // Resolve slug → contract address
+    let contractAddress = input;
+    if (!isAddr) {
+      const resolved = osInfo?.contractAddress ?? (await resolveSlugToContract(input, chain, key));
       if (!resolved) return null;
       contractAddress = resolved;
     }
@@ -111,28 +127,34 @@ export class AlchemyProvider implements NftDataProvider {
     const [meta, floor, owners] = await Promise.all([
       alchemyFetch<any>(`${base}/getContractMetadata?contractAddress=${contractAddress}`),
       alchemyFetch<any>(`${base}/getFloorPrice?contractAddress=${contractAddress}`),
-      alchemyFetch<any>(`${base}/getOwnersForContract?contractAddress=${contractAddress}`),
+      osStats?.numOwners != null
+        ? Promise.resolve(null)
+        : alchemyFetch<any>(`${base}/getOwnersForContract?contractAddress=${contractAddress}`),
     ]);
 
-    if (!meta) return null;
+    if (!meta && !osInfo) return null;
 
-    const floorPrice = floor?.openSea?.floorPrice ?? floor?.looksRare?.floorPrice ?? null;
+    const floorPrice =
+      osStats?.floorPrice ??
+      floor?.openSea?.floorPrice ??
+      floor?.looksRare?.floorPrice ??
+      null;
 
     return {
-      name:            meta.name ?? meta.openSeaMetadata?.collectionName ?? contractAddress,
-      slug:            slugOrAddress,
+      name:            osInfo?.name ?? meta?.name ?? meta?.openSeaMetadata?.collectionName ?? contractAddress,
+      slug:            input,
       chain,
       contractAddress,
       floorPrice,
-      volume24h:       null,
-      sales24h:        null,
+      volume24h:       osStats?.volume24h ?? null,
+      sales24h:        osStats?.sales24h ?? null,
       floorChange24h:  null,
-      volumeChange24h: null,
+      volumeChange24h: osStats?.volumeChange24h ?? null,
       listingsCount:   null,
-      holdersCount:    Array.isArray(owners?.owners) ? owners.owners.length : null,
-      totalSupply:     meta.totalSupply ? Number(meta.totalSupply) : null,
-      imageUrl:        meta.openSeaMetadata?.imageUrl ?? undefined,
-      description:     meta.openSeaMetadata?.description ?? undefined,
+      holdersCount:    osStats?.numOwners ?? (Array.isArray(owners?.owners) ? owners.owners.length : null),
+      totalSupply:     osInfo?.totalSupply ?? (meta?.totalSupply ? Number(meta.totalSupply) : null),
+      imageUrl:        osInfo?.imageUrl ?? meta?.openSeaMetadata?.imageUrl ?? undefined,
+      description:     osInfo?.description ?? meta?.openSeaMetadata?.description ?? undefined,
       updatedAt:       new Date(),
     };
   }

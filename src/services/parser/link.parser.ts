@@ -94,7 +94,8 @@ function parseOpenSeaUrl(url: URL): ParsedLink | null {
       type: 'collection',
       marketplace: 'opensea',
       chain: 'ethereum',
-      collectionSlug: parts[1],
+      // Strip trailing punctuation that often rides along when URLs are pasted
+      collectionSlug: parts[1].replace(/[-_.\s]+$/, ''),
     };
   }
 

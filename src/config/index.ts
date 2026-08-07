@@ -11,6 +11,7 @@ const configSchema = z.object({
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
   ALCHEMY_API_KEY: z.string().optional(),
+  OPENSEA_API_KEY: z.string().optional(),
 
   MAX_TRACKED_COLLECTIONS: z.coerce.number().default(10),
   MAX_TRACKED_ASSETS: z.coerce.number().default(20),
