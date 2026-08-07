@@ -158,18 +158,18 @@ export async function processWhaleBuyAlert(params: {
   txCount: number;
   windowMinutes: number;
   isSweep: boolean;
-}): Promise<void> {
+}): Promise<boolean> {
   const { trackedItemId, telegramChatId } = params;
 
   const setting = await prisma.notificationSetting.findFirst({
     where: { trackedItemId, eventType: 'WHALE_BUY', enabled: true },
   });
-  if (!setting) return;
+  if (!setting) return false;
 
   // Cheap pre-checks first — these must not consume the cooldown
-  if (!_bot) return;
+  if (!_bot) return false;
   const withinCap = await checkDailyCapForChat(telegramChatId);
-  if (!withinCap) return;
+  if (!withinCap) return false;
 
   // Atomic cooldown claim immediately before sending: a single conditional
   // update so concurrent ticks/processes cannot both pass the cooldown gate
@@ -184,7 +184,7 @@ export async function processWhaleBuyAlert(params: {
     },
     data: { lastSentAt: new Date() },
   });
-  if (claimed.count === 0) return;
+  if (claimed.count === 0) return false;
 
   const message = formatWhaleBuyAlert(params);
   try {
@@ -195,6 +195,7 @@ export async function processWhaleBuyAlert(params: {
         data: { trackedItemId, chatId: dbChat.id, eventType: 'WHALE_BUY', message },
       });
     }
+    return true;
   } catch (err) {
     logger.error({ err, telegramChatId }, 'Failed to send whale buy alert');
     // Roll back the cooldown claim so a transient Telegram failure does not
@@ -202,6 +203,7 @@ export async function processWhaleBuyAlert(params: {
     await prisma.notificationSetting
       .update({ where: { id: setting.id }, data: { lastSentAt: prevLastSentAt } })
       .catch((rbErr) => logger.error({ rbErr }, 'Failed to roll back cooldown claim'));
+    return false;
   }
 }
 
