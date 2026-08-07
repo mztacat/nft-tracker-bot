@@ -148,6 +148,56 @@ export function registerCallbackHandlers(bot: Bot): void {
     });
   });
 
+  // Notifications button on a collection card (by slug)
+  bot.callbackQuery(/^notif_menu_col:(.+)$/, async (ctx) => {
+    const slug = ctx.match![1];
+    const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat!.id) } });
+    const item = dbChat
+      ? await prisma.trackedItem.findFirst({
+          where: { chatId: dbChat.id, type: 'COLLECTION', collectionSlug: slug, isActive: true },
+        })
+      : null;
+
+    if (!item) {
+      await ctx.answerCallbackQuery();
+      await ctx.reply(
+        `ℹ️ Track <b>${slug}</b> first (📌 Track Collection), then you can configure its notifications.`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    await ctx.answerCallbackQuery();
+    const keyboard = await buildNotifSettingsKeyboard(item.id, item.type);
+    const label = item.label ?? item.collectionSlug ?? slug;
+    await ctx.reply(`🔔 <b>Notification Settings</b> — ${label}\n\nToggle event types:`, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    });
+  });
+
+  // Notifications button on an asset card (contract:tokenId)
+  bot.callbackQuery(/^notif_menu_asset:(.+):(\d+)$/, async (ctx) => {
+    const [, contract, tokenId] = ctx.match!;
+    const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat!.id) } });
+    const item = dbChat
+      ? await prisma.trackedItem.findFirst({
+          where: { chatId: dbChat.id, type: 'ASSET', contractAddress: contract, tokenId, isActive: true },
+        })
+      : null;
+
+    await ctx.answerCallbackQuery();
+    if (!item) {
+      await ctx.reply('ℹ️ Track this NFT first (📌 Track), then you can configure its notifications.');
+      return;
+    }
+    const keyboard = await buildNotifSettingsKeyboard(item.id, item.type);
+    await ctx.reply(`🔔 <b>Notification Settings</b> — #${tokenId}\n\nToggle event types:`, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    });
+  });
+
   // Notification settings for a tracked item
   bot.callbackQuery(/^notif_item:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
