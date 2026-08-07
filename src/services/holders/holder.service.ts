@@ -1,4 +1,5 @@
 import { getProvider, ERC721OwnerData, ERC1155HoldersData, CollectionHoldersData } from '../providers/index.js';
+import { prisma } from '../../db/client.js';
 import { logger } from '../../logger.js';
 
 const cache = new Map<string, { data: unknown; ts: number }>();
@@ -62,10 +63,52 @@ export async function getCollectionHolders(
 
   try {
     const data = await getProvider().getCollectionHolders(contractAddress, chain);
-    if (data) setCached(key, data);
+    if (data) {
+      await enrich24hHolderStats(contractAddress, data);
+      setCached(key, data);
+    }
     return data;
   } catch (err) {
     logger.error({ err }, 'getCollectionHolders failed');
     return null;
+  }
+}
+
+/**
+ * Fill holderChange24h / newHolders24h from holder-worker snapshots, when a
+ * tracked item exists for this contract and a ~24h-old snapshot is available.
+ * newHolders24h is the net gain in unique holders (0 when the base shrank).
+ */
+async function enrich24hHolderStats(
+  contractAddress: string,
+  data: CollectionHoldersData
+): Promise<void> {
+  if (data.uniqueHolders == null) return;
+  try {
+    const item = await prisma.trackedItem.findFirst({
+      where: { contractAddress: { equals: contractAddress, mode: 'insensitive' }, isActive: true },
+      select: { id: true },
+    });
+    if (!item) return;
+
+    const now = Date.now();
+    const baseline = await prisma.collectionSnapshot.findFirst({
+      where: {
+        trackedItemId: item.id,
+        timestamp: {
+          lte: new Date(now - 20 * 60 * 60 * 1000),
+          gte: new Date(now - 48 * 60 * 60 * 1000),
+        },
+        holdersCount: { not: null },
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+    if (!baseline?.holdersCount) return;
+
+    const change = data.uniqueHolders - baseline.holdersCount;
+    data.holderChange24h = change;
+    data.newHolders24h = Math.max(0, change);
+  } catch (err) {
+    logger.warn({ err }, 'enrich24hHolderStats failed (non-fatal)');
   }
 }
