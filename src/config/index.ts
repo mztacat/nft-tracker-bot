@@ -10,10 +10,7 @@ const configSchema = z.object({
   DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
-  RESERVOIR_API_KEY: z.string().optional(),
-  SIMPLEHASH_API_KEY: z.string().optional(),
   ALCHEMY_API_KEY: z.string().optional(),
-  OPENSEA_API_KEY: z.string().optional(),
 
   MAX_TRACKED_COLLECTIONS: z.coerce.number().default(10),
   MAX_TRACKED_ASSETS: z.coerce.number().default(20),
