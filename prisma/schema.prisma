@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  telegramId String   @unique
+  username   String?
+  firstName  String?
+  isApproved Boolean  @default(false)
+  isAdmin    Boolean  @default(false)
+  isOwner    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  trackedItems         TrackedItem[]
+  chatMembers          ChatMember[]
+  accessRequests       AccessRequest[]
+  notificationSettings NotificationSetting[]
+}
+
+model AccessRequest {
+  id             Int       @id @default(autoincrement())
+  telegramUserId String
+  username       String?
+  firstName      String?
+  status         String    @default("PENDING")
+  requestedAt    DateTime  @default(now())
+  reviewedAt     DateTime?
+  reviewedBy     String?
+
+  user User @relation(fields: [telegramUserId], references: [telegramId])
+
+  @@index([telegramUserId])
+  @@index([status])
+}
+
+model Chat {
+  id             Int      @id @default(autoincrement())
+  telegramChatId String   @unique
+  type           String
+  title          String?
+  isApproved     Boolean  @default(false)
+  settingsJson   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  trackedItems         TrackedItem[]
+  chatMembers          ChatMember[]
+  notificationSettings NotificationSetting[]
+  alertHistories       AlertHistory[]
+}
+
+model ChatMember {
+  id       Int     @id @default(autoincrement())
+  chatId   Int
+  userId   Int
+  role     String  @default("member")
+  approved Boolean @default(false)
+
+  chat Chat @relation(fields: [chatId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([chatId, userId])
+}
+
+model TrackedItem {
+  id              Int      @id @default(autoincrement())
+  chatId          Int
+  ownerUserId     Int
+  type            String
+  chain           String?
+  collectionSlug  String?
+  contractAddress String?
+  tokenId         String?
+  walletAddress   String?
+  label           String?
+  isActive        Boolean  @default(true)
+  isPaused        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  chat                 Chat                  @relation(fields: [chatId], references: [id])
+  owner                User                  @relation(fields: [ownerUserId], references: [id])
+  notificationSettings NotificationSetting[]
+  collectionSnapshots  CollectionSnapshot[]
+  assetSnapshots       AssetSnapshot[]
+  alertHistories       AlertHistory[]
+
+  @@index([chatId])
+  @@index([type])
+  @@index([collectionSlug])
+  @@index([contractAddress, tokenId])
+}
+
+model NotificationSetting {
+  id             Int       @id @default(autoincrement())
+  trackedItemId  Int
+  chatId         Int
+  userId         Int?
+  eventType      String
+  enabled        Boolean   @default(true)
+  thresholdJson  Json?
+  cooldownMinutes Int      @default(30)
+  lastSentAt     DateTime?
+
+  trackedItem TrackedItem @relation(fields: [trackedItemId], references: [id])
+  chat        Chat        @relation(fields: [chatId], references: [id])
+  user        User?       @relation(fields: [userId], references: [id])
+
+  @@unique([trackedItemId, eventType])
+  @@index([trackedItemId])
+}
+
+model CollectionSnapshot {
+  id             Int      @id @default(autoincrement())
+  trackedItemId  Int
+  timestamp      DateTime @default(now())
+  floorPrice     Float?
+  volume1h       Float?
+  volume24h      Float?
+  sales1h        Int?
+  sales24h       Int?
+  listingsCount  Int?
+  holdersCount   Int?
+  topHoldersJson Json?
+
+  trackedItem TrackedItem @relation(fields: [trackedItemId], references: [id])
+
+  @@index([trackedItemId, timestamp])
+}
+
+model AssetSnapshot {
+  id            Int      @id @default(autoincrement())
+  trackedItemId Int
+  timestamp     DateTime @default(now())
+  ownerAddress  String?
+  listingPrice  Float?
+  lastSalePrice Float?
+  status        String?
+
+  trackedItem TrackedItem @relation(fields: [trackedItemId], references: [id])
+
+  @@index([trackedItemId, timestamp])
+}
+
+model MarketEvent {
+  id           Int      @id @default(autoincrement())
+  collectionId String?
+  assetId      String?
+  eventType    String
+  price        Float?
+  buyer        String?
+  seller       String?
+  marketplace  String?
+  txHash       String?
+  timestamp    DateTime
+  rawJson      Json?
+  processed    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([collectionId, eventType])
+  @@index([assetId, eventType])
+  @@index([processed])
+}
+
+model AlertHistory {
+  id            Int      @id @default(autoincrement())
+  trackedItemId Int
+  chatId        Int
+  eventType     String
+  message       String
+  sentAt        DateTime @default(now())
+
+  trackedItem TrackedItem @relation(fields: [trackedItemId], references: [id])
+  chat        Chat        @relation(fields: [chatId], references: [id])
+
+  @@index([trackedItemId, eventType])
+  @@index([chatId])
+}
+
+model Settings {
+  id     Int    @id @default(autoincrement())
+  scope  String
+  scopeId String
+  key    String
+  value  String
+
+  @@unique([scope, scopeId, key])
+}
