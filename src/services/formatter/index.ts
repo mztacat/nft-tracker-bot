@@ -24,20 +24,22 @@ function escHtml(text: string): string {
 }
 
 export function formatCollectionSummary(data: CollectionData): string {
-  const lines = [
+  const time = data.updatedAt.toUTCString().replace(/:\d{2} GMT$/, ' UTC');
+  const lines: (string | null)[] = [
     `<b>${escHtml(data.name)}</b>`,
-    `Chain: ${data.chain}`,
-    `Floor: <b>${fmt(data.floorPrice)} ETH</b>`,
-    `24h Volume: ${fmt(data.volume24h)} ETH`,
-    `24h Sales: ${data.sales24h ?? 'N/A'}`,
-    `Floor Change (24h): ${fmtChange(data.floorChange24h)}`,
-    `Volume Change (24h): ${fmtChange(data.volumeChange24h)}`,
-    `Listings: ${data.listingsCount ?? 'N/A'}`,
-    `Unique Holders: ${data.holdersCount ?? 'N/A'}`,
-    `Total Supply: ${data.totalSupply ?? 'N/A'}`,
-    `<i>Updated: ${data.updatedAt.toUTCString()}</i>`,
+    `<code>${shortAddr(data.contractAddress ?? '')}</code> · ${data.chain}`,
+    ``,
+    data.floorPrice != null ? `Floor  <b>${fmt(data.floorPrice, 4)} ETH</b>` : null,
+    data.floorChange24h != null ? `24h  ${fmtChange(data.floorChange24h)}` : null,
+    data.volume24h != null ? `Volume 24h  ${fmt(data.volume24h)} ETH` : null,
+    data.sales24h != null ? `Sales 24h  ${data.sales24h}` : null,
+    data.listingsCount != null ? `Listed  ${data.listingsCount}` : null,
+    data.holdersCount != null ? `Holders  ${data.holdersCount}` : null,
+    data.totalSupply != null ? `Supply  ${data.totalSupply}` : null,
+    ``,
+    `<i>${time}</i>`,
   ];
-  return lines.join('\n');
+  return lines.filter((l) => l !== null).join('\n');
 }
 
 export function formatAssetSummary(data: AssetData): string {
@@ -45,22 +47,22 @@ export function formatAssetSummary(data: AssetData): string {
     ? ((data.listingPrice - data.floorPrice) / data.floorPrice) * 100
     : null;
 
-  const lines = [
+  const time = data.updatedAt.toUTCString().replace(/:\d{2} GMT$/, ' UTC');
+  const lines: (string | null)[] = [
     `<b>${escHtml(data.name ?? `#${data.tokenId}`)}</b>`,
-    `Collection: ${escHtml(data.collectionName)}`,
-    `Token ID: ${data.tokenId}`,
-    `Chain: ${data.chain}`,
-    `Standard: ${data.tokenStandard ?? 'N/A'}`,
-    `Owner: <code>${shortAddr(data.ownerAddress ?? 'Unknown')}</code>`,
-    `Status: ${data.isListed ? '🟢 Listed' : '⚫ Not listed'}`,
-    data.listingPrice != null ? `Listing Price: <b>${fmt(data.listingPrice)} ETH</b>` : `Listing Price: N/A`,
-    `Last Sale: ${fmt(data.lastSalePrice)} ETH`,
-    `Collection Floor: ${fmt(data.floorPrice)} ETH`,
-    premiumDiscount != null ? `vs Floor: ${fmtChange(premiumDiscount)}` : `vs Floor: N/A`,
-    data.rarityRank != null ? `Rarity Rank: #${data.rarityRank}` : `Rarity Rank: N/A`,
-    `<i>Updated: ${data.updatedAt.toUTCString()}</i>`,
+    `${escHtml(data.collectionName)} · ${data.chain}${data.tokenStandard ? ` · ${data.tokenStandard}` : ''}`,
+    ``,
+    data.ownerAddress ? `Owner  <code>${shortAddr(data.ownerAddress)}</code>` : null,
+    `Status  ${data.isListed ? 'Listed' : 'Not listed'}`,
+    data.listingPrice != null ? `Price  <b>${fmt(data.listingPrice, 4)} ETH</b>` : null,
+    data.lastSalePrice != null ? `Last Sale  ${fmt(data.lastSalePrice, 4)} ETH` : null,
+    data.floorPrice != null ? `Floor  ${fmt(data.floorPrice, 4)} ETH` : null,
+    premiumDiscount != null ? `vs Floor  ${fmtChange(premiumDiscount)}` : null,
+    data.rarityRank != null ? `Rarity  #${data.rarityRank}` : null,
+    ``,
+    `<i>${time}</i>`,
   ];
-  return lines.join('\n');
+  return lines.filter((l) => l !== null).join('\n');
 }
 
 export function formatERC721Owner(data: ERC721OwnerData): string {

@@ -57,13 +57,29 @@ async function resolveSlugToContract(slug: string, chain: string, apiKey: string
     return null;
   }
 
-  // Prefer a contract whose slug/name closely matches
-  const slugNorm = slug.toLowerCase().replace(/-/g, '');
-  const best = contracts.find((c: any) => {
-    const name = (c.name ?? '').toLowerCase().replace(/\s/g, '');
-    const sym  = (c.symbol ?? '').toLowerCase();
-    return name.includes(slugNorm) || slugNorm.includes(name) || sym === slugNorm;
-  }) ?? contracts[0];
+  // 1. Exact OpenSea slug match is authoritative — the slug came from an opensea.io URL
+  const slugLower = slug.toLowerCase();
+  const exact = contracts.find(
+    (c: any) => (c.openSeaMetadata?.collectionSlug ?? '').toLowerCase() === slugLower
+  );
+
+  // 2. Fall back to fuzzy name/symbol matching, preferring verified collections
+  const slugNorm = slugLower.replace(/-/g, '');
+  const fuzzyMatches = contracts.filter((c: any) => {
+    const name    = (c.name ?? '').toLowerCase().replace(/\s/g, '');
+    const osName  = (c.openSeaMetadata?.collectionName ?? '').toLowerCase().replace(/\s/g, '');
+    const sym     = (c.symbol ?? '').toLowerCase();
+    return name.includes(slugNorm) || osName.includes(slugNorm) || slugNorm.includes(name) || sym === slugNorm;
+  });
+  const fuzzy =
+    fuzzyMatches.find((c: any) => c.openSeaMetadata?.safelistRequestStatus === 'verified') ??
+    fuzzyMatches[0];
+
+  const best = exact ?? fuzzy;
+  if (!best) {
+    logger.warn({ slug }, 'Alchemy: no contract matched slug');
+    return null;
+  }
 
   const address: string = best.address;
   slugCache.set(slug, address);
@@ -92,9 +108,10 @@ export class AlchemyProvider implements NftDataProvider {
       contractAddress = resolved;
     }
 
-    const [meta, floor] = await Promise.all([
+    const [meta, floor, owners] = await Promise.all([
       alchemyFetch<any>(`${base}/getContractMetadata?contractAddress=${contractAddress}`),
       alchemyFetch<any>(`${base}/getFloorPrice?contractAddress=${contractAddress}`),
+      alchemyFetch<any>(`${base}/getOwnersForContract?contractAddress=${contractAddress}`),
     ]);
 
     if (!meta) return null;
@@ -112,7 +129,7 @@ export class AlchemyProvider implements NftDataProvider {
       floorChange24h:  null,
       volumeChange24h: null,
       listingsCount:   null,
-      holdersCount:    null,
+      holdersCount:    Array.isArray(owners?.owners) ? owners.owners.length : null,
       totalSupply:     meta.totalSupply ? Number(meta.totalSupply) : null,
       imageUrl:        meta.openSeaMetadata?.imageUrl ?? undefined,
       description:     meta.openSeaMetadata?.description ?? undefined,
