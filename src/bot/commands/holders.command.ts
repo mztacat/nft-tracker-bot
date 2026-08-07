@@ -25,7 +25,7 @@ export function registerHoldersCommand(bot: Bot): void {
 
     const keyboard = items.map((item) => [
       {
-        text: `👁 ${item.label ?? item.collectionSlug ?? `#${item.tokenId}` ?? 'Item'}`,
+        text: `👁 ${item.label ?? item.collectionSlug ?? `#${item.tokenId}`}`,
         callback_data: item.type === 'COLLECTION'
           ? `view_holders_collection:${item.contractAddress}:${item.chain ?? 'ethereum'}`
           : `view_holder_erc721:${item.contractAddress}:${item.tokenId}:${item.chain ?? 'ethereum'}`,

@@ -97,7 +97,7 @@ export function registerCallbackHandlers(bot: Bot): void {
     else if (item.type === 'ASSET') await untrackAsset(ctx.chat!.id, id);
     else await prisma.trackedItem.update({ where: { id }, data: { isActive: false } });
 
-    await ctx.reply(`✅ Stopped tracking <b>${item.label ?? item.collectionSlug ?? `#${item.tokenId}` ?? 'item'}</b>.`, { parse_mode: 'HTML' });
+    await ctx.reply(`✅ Stopped tracking <b>${item.label ?? item.collectionSlug ?? `#${item.tokenId}`}</b>.`, { parse_mode: 'HTML' });
   });
 
   // View ERC-721 owner
@@ -148,7 +148,7 @@ export function registerCallbackHandlers(bot: Bot): void {
     if (!item) { await ctx.reply('Item not found.'); return; }
 
     const keyboard = await buildNotifSettingsKeyboard(id, item.type);
-    const label = item.label ?? item.collectionSlug ?? `#${item.tokenId}` ?? 'Item';
+    const label = item.label ?? item.collectionSlug ?? `#${item.tokenId}`;
     await ctx.reply(`🔔 <b>Notification Settings</b> — ${label}\n\nToggle event types:`, {
       parse_mode: 'HTML',
       reply_markup: keyboard,
@@ -291,7 +291,6 @@ export function registerCallbackHandlers(bot: Bot): void {
 
   bot.callbackQuery('menu_tracking', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.conversation?.run?.('tracking').catch(() => {});
     // Manually trigger tracking display
     const chatIdStr = String(ctx.chat!.id);
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: chatIdStr } });

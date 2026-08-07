@@ -38,7 +38,7 @@ export function registerNotificationsCommand(bot: Bot): void {
 
     const keyboard = items.map((item) => [
       {
-        text: `🔔 ${item.label ?? item.collectionSlug ?? `#${item.tokenId}` ?? 'Item'}`,
+        text: `🔔 ${item.label ?? item.collectionSlug ?? `#${item.tokenId}`}`,
         callback_data: `notif_item:${item.id}`,
       },
     ]);

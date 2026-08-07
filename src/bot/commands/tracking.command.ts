@@ -60,7 +60,7 @@ export function registerTrackingCommand(bot: Bot): void {
 
     const keyboard = items.slice(0, 10).map((item) => [
       {
-        text: `🗑 Untrack ${item.label ?? item.collectionSlug ?? `#${item.tokenId}` ?? 'Item'}`,
+        text: `🗑 Untrack ${item.label ?? item.collectionSlug ?? `#${item.tokenId}`}`,
         callback_data: `untrack:${item.id}`,
       },
     ]);

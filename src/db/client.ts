@@ -12,8 +12,8 @@ export const prisma =
     ],
   });
 
-prisma.$on('warn', (e) => logger.warn(e, 'Prisma warning'));
-prisma.$on('error', (e) => logger.error(e, 'Prisma error'));
+prisma.$on('warn' as never, (e: any) => logger.warn(e, 'Prisma warning'));
+prisma.$on('error' as never, (e: any) => logger.error(e, 'Prisma error'));
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
