@@ -161,12 +161,19 @@ export async function processWhaleBuyAlert(params: {
 }): Promise<void> {
   const { trackedItemId, telegramChatId } = params;
 
-  // Atomic cooldown claim: check-and-mark in a single conditional update so
-  // concurrent ticks/processes cannot both pass the cooldown gate
   const setting = await prisma.notificationSetting.findFirst({
     where: { trackedItemId, eventType: 'WHALE_BUY', enabled: true },
   });
   if (!setting) return;
+
+  // Cheap pre-checks first — these must not consume the cooldown
+  if (!_bot) return;
+  const withinCap = await checkDailyCapForChat(telegramChatId);
+  if (!withinCap) return;
+
+  // Atomic cooldown claim immediately before sending: a single conditional
+  // update so concurrent ticks/processes cannot both pass the cooldown gate
+  const prevLastSentAt = setting.lastSentAt;
   const cooldownMs = (setting.cooldownMinutes ?? 5) * 60_000;
   const cutoff = new Date(Date.now() - cooldownMs);
   const claimed = await prisma.notificationSetting.updateMany({
@@ -179,18 +186,22 @@ export async function processWhaleBuyAlert(params: {
   });
   if (claimed.count === 0) return;
 
-  const withinCap = await checkDailyCapForChat(telegramChatId);
-  if (!withinCap) return;
-
   const message = formatWhaleBuyAlert(params);
-  if (_bot) {
-    try {
-      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
-      const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
-      if (dbChat) await markAlertSent(trackedItemId, dbChat.id, 'WHALE_BUY', message);
-    } catch (err) {
-      logger.error({ err, telegramChatId }, 'Failed to send whale buy alert');
+  try {
+    await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+    const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
+    if (dbChat) {
+      await prisma.alertHistory.create({
+        data: { trackedItemId, chatId: dbChat.id, eventType: 'WHALE_BUY', message },
+      });
     }
+  } catch (err) {
+    logger.error({ err, telegramChatId }, 'Failed to send whale buy alert');
+    // Roll back the cooldown claim so a transient Telegram failure does not
+    // suppress the next qualifying alert for the whole cooldown period
+    await prisma.notificationSetting
+      .update({ where: { id: setting.id }, data: { lastSentAt: prevLastSentAt } })
+      .catch((rbErr) => logger.error({ rbErr }, 'Failed to roll back cooldown claim'));
   }
 }
 
