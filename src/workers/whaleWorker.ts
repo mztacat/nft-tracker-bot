@@ -39,7 +39,24 @@ async function setCursor(itemId: number, block: number): Promise<void> {
   });
 }
 
+// Process-level non-overlap lock: node-cron allows overlapping executions,
+// and two concurrent ticks would read the same cursors and double-alert.
+let _running = false;
+
 export async function runWhaleWorker(): Promise<void> {
+  if (_running) {
+    logger.warn('Whale worker tick skipped: previous tick still running');
+    return;
+  }
+  _running = true;
+  try {
+    await runWhaleWorkerInner();
+  } finally {
+    _running = false;
+  }
+}
+
+async function runWhaleWorkerInner(): Promise<void> {
   logger.info('Whale worker tick started');
 
   const items = await prisma.trackedItem.findMany({

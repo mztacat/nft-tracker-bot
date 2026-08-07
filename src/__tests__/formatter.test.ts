@@ -57,9 +57,11 @@ describe('Formatter', () => {
       expect(result).toContain('+6.20%');
     });
 
-    it('handles null values gracefully', () => {
+    it('omits null values from the card', () => {
       const result = formatCollectionSummary({ ...mockCollection, floorPrice: null, volume24h: null });
-      expect(result).toContain('N/A');
+      expect(result).not.toContain('Floor ');
+      expect(result).not.toContain('Volume 24h');
+      expect(result).toContain('Azuki');
     });
   });
 

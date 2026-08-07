@@ -94,6 +94,7 @@ async function main() {
   // Run initial ticks
   await runMarketWorker().catch((err) => logger.error({ err }, 'Initial market tick failed'));
   await runAssetWorker().catch((err) => logger.error({ err }, 'Initial asset tick failed'));
+  await runWhaleWorker().catch((err) => logger.error({ err }, 'Initial whale tick failed'));
 
   logger.info('Worker running. Waiting for scheduled jobs...');
 

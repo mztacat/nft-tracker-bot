@@ -161,8 +161,23 @@ export async function processWhaleBuyAlert(params: {
 }): Promise<void> {
   const { trackedItemId, telegramChatId } = params;
 
-  const canSend = await canSendAlert(trackedItemId, 'WHALE_BUY', 5);
-  if (!canSend) return;
+  // Atomic cooldown claim: check-and-mark in a single conditional update so
+  // concurrent ticks/processes cannot both pass the cooldown gate
+  const setting = await prisma.notificationSetting.findFirst({
+    where: { trackedItemId, eventType: 'WHALE_BUY', enabled: true },
+  });
+  if (!setting) return;
+  const cooldownMs = (setting.cooldownMinutes ?? 5) * 60_000;
+  const cutoff = new Date(Date.now() - cooldownMs);
+  const claimed = await prisma.notificationSetting.updateMany({
+    where: {
+      id: setting.id,
+      enabled: true,
+      OR: [{ lastSentAt: null }, { lastSentAt: { lt: cutoff } }],
+    },
+    data: { lastSentAt: new Date() },
+  });
+  if (claimed.count === 0) return;
 
   const withinCap = await checkDailyCapForChat(telegramChatId);
   if (!withinCap) return;
