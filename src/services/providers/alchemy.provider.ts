@@ -256,20 +256,48 @@ export class AlchemyProvider implements NftDataProvider {
     const key  = config.ALCHEMY_API_KEY!;
     const base = baseUrl(chain, key);
 
-    const data = await alchemyFetch<any>(
-      `${base}/getOwnersForContract?contractAddress=${contractAddress}&withTokenBalances=false`
-    );
+    // Fetch owners WITH balances so we can rank real top holders.
+    // Paginate defensively (cap pages to bound response size/time).
+    type OwnerEntry = { ownerAddress: string; tokenBalances: { balance: string }[] };
+    const owners: OwnerEntry[] = [];
+    let pageKey: string | undefined;
+    for (let page = 0; page < 5; page++) {
+      const url =
+        `${base}/getOwnersForContract?contractAddress=${contractAddress}&withTokenBalances=true` +
+        (pageKey ? `&pageKey=${encodeURIComponent(pageKey)}` : '');
+      const data = await alchemyFetch<any>(url);
+      if (!data?.owners) {
+        if (page === 0) return null;
+        break;
+      }
+      owners.push(...data.owners);
+      pageKey = data.pageKey;
+      if (!pageKey) break;
+    }
 
-    if (!data?.owners) return null;
+    if (!owners.length) return null;
 
-    const total = data.owners.length;
+    const holders = owners
+      .map((o) => ({
+        address: o.ownerAddress,
+        balance: (o.tokenBalances ?? []).reduce((sum, t) => sum + Number(t.balance ?? 1), 0),
+      }))
+      .sort((a, b) => b.balance - a.balance);
+
+    const totalSupply = holders.reduce((sum, h) => sum + h.balance, 0);
+    const uniqueHolders = holders.length;
+    const sumTop = (n: number) => holders.slice(0, n).reduce((s, h) => s + h.balance, 0);
 
     return {
-      uniqueHolders:      total,
-      totalSupply:        total,
-      topHolders:         (data.owners as string[]).slice(0, 10).map((addr: string) => ({ address: addr })),
-      top10Concentration: total > 0 ? (10 / total) * 100 : null,
-      top50Concentration: total > 0 ? Math.min((50 / total) * 100, 100) : null,
+      uniqueHolders,
+      totalSupply,
+      topHolders: holders.slice(0, 10).map((h) => ({
+        address: h.address,
+        balance: h.balance,
+        percentage: totalSupply > 0 ? (h.balance / totalSupply) * 100 : undefined,
+      })),
+      top10Concentration: totalSupply > 0 ? (sumTop(10) / totalSupply) * 100 : null,
+      top50Concentration: totalSupply > 0 ? (sumTop(50) / totalSupply) * 100 : null,
       holderChange24h:    null,
       newHolders24h:      null,
     };
