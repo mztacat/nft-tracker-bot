@@ -69,7 +69,10 @@ export async function requireApproved(ctx: Context, next: NextFunction): Promise
   if (ctx.chat && ctx.chat.type !== 'private') {
     const chat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat.id) } });
     if (!chat || !chat.isApproved) {
-      await ctx.reply('⛔ This group/channel is not approved to use the bot.');
+      await ctx.reply(
+        `⛔ This group/channel is not approved to use the bot.\n\nChat id: <code>${ctx.chat.id}</code>\nAn admin can approve it with:\n<code>/approvegroup ${ctx.chat.id}</code>`,
+        { parse_mode: 'HTML' }
+      );
       return;
     }
   }

@@ -4,6 +4,30 @@ import { prisma } from '../../db/client.js';
 import { config } from '../../config/index.js';
 import { logger } from '../../logger.js';
 
+/**
+ * Normalize a chat id from raw input. Accepts:
+ * - numeric ids: "-1001477170750", "1477170750" (bare internal supergroup id)
+ * - t.me/c message links: "https://t.me/c/1477170750/1/632605" → "-1001477170750"
+ */
+export function normalizeChatId(input: string): string | null {
+  const trimmed = input.trim();
+
+  // t.me/c/<internal_id>/... link
+  const linkMatch = trimmed.match(/t\.me\/c\/(\d+)/i);
+  if (linkMatch) return `-100${linkMatch[1]}`;
+
+  // Already a full negative id
+  if (/^-\d+$/.test(trimmed)) return trimmed;
+
+  // Bare positive number: could be a private chat id or a bare internal
+  // supergroup id (10-digit ids from t.me/c links are supergroups)
+  if (/^\d+$/.test(trimmed)) {
+    return trimmed.length >= 10 ? `-100${trimmed}` : trimmed;
+  }
+
+  return null;
+}
+
 async function approveUserById(bot: Bot, adminId: string, targetId: string): Promise<string> {
   const user = await prisma.user.findUnique({ where: { telegramId: targetId } });
   if (!user) return `❌ User ${targetId} not found.`;
@@ -123,17 +147,27 @@ export function registerAccessCommands(bot: Bot): void {
     await ctx.reply(result, { parse_mode: 'HTML' });
   });
 
-  // /approvegroup <chat_id>
+  // /approvegroup <chat_id | t.me/c/... link>
   bot.command('approvegroup', requireAdmin, async (ctx) => {
     const args = ctx.match?.trim();
-    if (!args) { await ctx.reply('Usage: /approvegroup <chat_id>'); return; }
+    if (!args) {
+      await ctx.reply(
+        'Usage: /approvegroup <chat_id>\n\nAccepts a numeric id (e.g. -1001477170750) or a t.me/c/… message link. Tip: add the bot to the group and check logs, or forward a group message to @userinfobot to find the id.'
+      );
+      return;
+    }
+    const chatId = normalizeChatId(args);
+    if (!chatId) {
+      await ctx.reply('❌ Could not parse a chat id from that input. Provide a numeric id like -1001477170750 or a t.me/c/… link.');
+      return;
+    }
     try {
       await prisma.chat.upsert({
-        where: { telegramChatId: args },
+        where: { telegramChatId: chatId },
         update: { isApproved: true },
-        create: { telegramChatId: args, type: 'group', isApproved: true },
+        create: { telegramChatId: chatId, type: 'group', isApproved: true },
       });
-      await ctx.reply(`✅ Group/channel ${args} approved.`);
+      await ctx.reply(`✅ Group/channel <code>${chatId}</code> approved.`, { parse_mode: 'HTML' });
     } catch (err) {
       await ctx.reply(`❌ Failed: ${String(err)}`);
     }
@@ -143,8 +177,9 @@ export function registerAccessCommands(bot: Bot): void {
   bot.command('denygroup', requireAdmin, async (ctx) => {
     const args = ctx.match?.trim();
     if (!args) { await ctx.reply('Usage: /denygroup <chat_id>'); return; }
-    await prisma.chat.updateMany({ where: { telegramChatId: args }, data: { isApproved: false } });
-    await ctx.reply(`❌ Group/channel ${args} denied.`);
+    const chatId = normalizeChatId(args) ?? args;
+    await prisma.chat.updateMany({ where: { telegramChatId: chatId }, data: { isApproved: false } });
+    await ctx.reply(`❌ Group/channel ${chatId} denied.`);
   });
 
   // /addadmin <user_id>
