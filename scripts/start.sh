@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "Running database migrations..."
-npx prisma migrate deploy
+echo "Applying database schema..."
+npx prisma db push --accept-data-loss
 
 echo "Starting $1..."
 if [ "$1" = "worker" ]; then
