@@ -2,7 +2,7 @@ import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
 import { config } from '../../config/index.js';
 import { requireAdmin } from '../middlewares/auth.middleware.js';
-import { trackCollection, untrackCollection } from '../../services/nft/collection.service.js';
+import { trackCollection, untrackCollection, getCollectionSummary } from '../../services/nft/collection.service.js';
 import { trackAsset, untrackAsset } from '../../services/nft/asset.service.js';
 import { getERC721Owner, getCollectionHolders } from '../../services/holders/holder.service.js';
 import {
@@ -46,11 +46,16 @@ export function registerCallbackHandlers(bot: Bot): void {
     const [, slug, chain] = ctx.match!;
     const from = ctx.from!;
     try {
+      // Resolve contract address (cached from the card the user just viewed) —
+      // whale/sweep detection needs it
+      const summary = await getCollectionSummary(slug, chain).catch(() => null);
       const result = await trackCollection({
         chatId: ctx.chat!.id,
         userId: from.id,
         slug,
         chain,
+        contractAddress: summary?.contractAddress,
+        label: summary?.name,
       });
       const msg = result.reactivated
         ? `✅ Tracking resumed for <b>${slug}</b>.`

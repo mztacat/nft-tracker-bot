@@ -87,14 +87,15 @@ export async function trackCollection(params: {
 
   // Create default notification settings
   const defaultEvents = ['FLOOR_CHANGE', 'SALE', 'LISTING', 'WHALE_BUY'];
+  const enabledByDefault = new Set(['FLOOR_CHANGE', 'WHALE_BUY', 'LISTING']);
   await prisma.notificationSetting.createMany({
     data: defaultEvents.map((eventType) => ({
       trackedItemId: item.id,
       chatId: dbChat.id,
       userId: dbUser.id,
       eventType,
-      enabled: eventType === 'FLOOR_CHANGE',
-      cooldownMinutes: 30,
+      enabled: enabledByDefault.has(eventType),
+      cooldownMinutes: eventType === 'FLOOR_CHANGE' ? 30 : 5,
     })),
     skipDuplicates: true,
   });

@@ -13,6 +13,7 @@ import {
   registerNotificationsCommand,
   registerAccessCommands,
 } from './commands/index.js';
+import { registerWalletCommand } from './commands/wallet.command.js';
 import { registerCallbackHandlers } from './handlers/callback.handler.js';
 import { logger } from '../logger.js';
 
@@ -40,6 +41,7 @@ export function createBot(): Bot {
   registerTrackingCommand(bot);
   registerHoldersCommand(bot);
   registerNotificationsCommand(bot);
+  registerWalletCommand(bot);
   registerAccessCommands(bot);
   registerCallbackHandlers(bot);
 
@@ -68,6 +70,8 @@ export async function registerBotCommands(bot: Bot): Promise<void> {
     { command: 'link', description: 'Add NFT or collection link' },
     { command: 'tracking', description: 'View tracked items' },
     { command: 'holders', description: 'View holder info' },
+    { command: 'trackwallet', description: 'Track a wallet\'s NFT activity' },
+    { command: 'wallets', description: 'Manage tracked wallets' },
     { command: 'notifications', description: 'Manage notifications' },
     { command: 'access', description: 'Admin access panel' },
     { command: 'requests', description: 'Pending requests' },

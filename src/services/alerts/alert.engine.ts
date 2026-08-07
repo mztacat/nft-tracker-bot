@@ -179,6 +179,37 @@ export async function processWhaleBuyAlert(params: {
   }
 }
 
+/**
+ * Generic alert sender for new event types (WHALE_BUY, LISTING, WALLET_ACTIVITY).
+ * Applies notification-setting checks, cooldown, and the daily cap.
+ */
+export async function processGenericAlert(params: {
+  trackedItemId: number;
+  telegramChatId: string;
+  eventType: string;
+  message: string;
+  defaultCooldownMinutes?: number;
+}): Promise<boolean> {
+  const { trackedItemId, telegramChatId, eventType, message, defaultCooldownMinutes = 5 } = params;
+
+  const canSend = await canSendAlert(trackedItemId, eventType, defaultCooldownMinutes);
+  if (!canSend) return false;
+
+  const withinCap = await checkDailyCapForChat(telegramChatId);
+  if (!withinCap) return false;
+
+  if (!_bot) return false;
+  try {
+    await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+    const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
+    if (dbChat) await markAlertSent(trackedItemId, dbChat.id, eventType, message);
+    return true;
+  } catch (err) {
+    logger.error({ err, eventType }, 'Failed to send alert');
+    return false;
+  }
+}
+
 export async function sendDigestAlert(params: {
   trackedItemId: number;
   telegramChatId: string;

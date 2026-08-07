@@ -5,6 +5,8 @@ import { runMarketWorker, runAssetWorker } from './workers/marketWorker.js';
 import { runHolderWorker } from './workers/holderWorker.js';
 import { runAlertWorker } from './workers/alertWorker.js';
 import { runWhaleWorker } from './workers/whaleWorker.js';
+import { runWalletWorker } from './workers/walletWorker.js';
+import { runSnipeWorker } from './workers/snipeWorker.js';
 import { logger } from './logger.js';
 import { config } from './config/index.js';
 import { createBot } from './bot/index.js';
@@ -48,6 +50,24 @@ async function main() {
       await runWhaleWorker();
     } catch (err) {
       logger.error({ err }, 'Whale worker cron error');
+    }
+  });
+
+  // Wallet activity: every 2 minutes
+  cron.schedule('*/2 * * * *', async () => {
+    try {
+      await runWalletWorker();
+    } catch (err) {
+      logger.error({ err }, 'Wallet worker cron error');
+    }
+  });
+
+  // Below-floor snipe scan: every 3 minutes
+  cron.schedule('*/3 * * * *', async () => {
+    try {
+      await runSnipeWorker();
+    } catch (err) {
+      logger.error({ err }, 'Snipe worker cron error');
     }
   });
 

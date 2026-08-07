@@ -156,6 +156,68 @@ export function formatDigest(collectionName: string, stats: {
   ].filter(Boolean).join('\n');
 }
 
+export function formatWhaleAlert(params: {
+  collectionName: string;
+  buyer: string;
+  count: number;
+  tokenIds: string[];
+  windowMinutes: number;
+  isMint: boolean;
+}): string {
+  const { collectionName, buyer, count, tokenIds, windowMinutes, isMint } = params;
+  const sample = tokenIds.slice(0, 5).map((t) => `#${t}`).join(', ');
+  return [
+    `🐋 <b>${isMint ? 'Whale Mint' : 'Sweep Detected'}</b>`,
+    ``,
+    `<b>${escHtml(collectionName)}</b>`,
+    `Wallet  <code>${shortAddr(buyer)}</code>`,
+    `${isMint ? 'Minted' : 'Acquired'}  <b>${count} items</b> in ${windowMinutes} min`,
+    tokenIds.length ? `Tokens  ${sample}${tokenIds.length > 5 ? '…' : ''}` : null,
+    ``,
+    `<a href="https://etherscan.io/address/${buyer}">Etherscan</a> · <a href="https://opensea.io/${buyer}">OpenSea</a>`,
+  ].filter(Boolean).join('\n');
+}
+
+export function formatWalletActivityAlert(params: {
+  wallet: string;
+  label?: string | null;
+  direction: 'in' | 'out';
+  collectionName: string;
+  tokenIds: string[];
+  txHash: string;
+}): string {
+  const { wallet, label, direction, collectionName, tokenIds, txHash } = params;
+  const sample = tokenIds.slice(0, 5).map((t) => `#${t}`).join(', ');
+  return [
+    `${direction === 'in' ? '🟢' : '🔴'} <b>Wallet ${direction === 'in' ? 'Acquired' : 'Sent'} NFTs</b>`,
+    ``,
+    `Wallet  <code>${shortAddr(wallet)}</code>${label ? ` (${escHtml(label)})` : ''}`,
+    `Collection  <b>${escHtml(collectionName)}</b>`,
+    `Tokens  ${sample}${tokenIds.length > 5 ? ` +${tokenIds.length - 5} more` : ''}`,
+    ``,
+    `<a href="https://etherscan.io/tx/${txHash}">Transaction</a>`,
+  ].join('\n');
+}
+
+export function formatSnipeAlert(params: {
+  collectionName: string;
+  tokenId: string | null;
+  price: number;
+  floor: number;
+  url?: string | null;
+}): string {
+  const { collectionName, tokenId, price, floor, url } = params;
+  const belowPct = ((floor - price) / floor) * 100;
+  return [
+    `🎯 <b>Listed Below Floor</b>`,
+    ``,
+    `<b>${escHtml(collectionName)}</b>${tokenId ? ` #${tokenId}` : ''}`,
+    `Price  <b>${fmt(price, 4)} ETH</b>`,
+    `Floor  ${fmt(floor, 4)} ETH  (−${belowPct.toFixed(1)}%)`,
+    url ? `\n<a href="${url}">View listing</a>` : null,
+  ].filter(Boolean).join('\n');
+}
+
 export function formatOwnerChangeAlert(collectionName: string, tokenId: string, newOwner: string, oldOwner?: string | null): string {
   return [
     `🔄 <b>Owner Change Alert</b>`,

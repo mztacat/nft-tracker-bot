@@ -129,3 +129,61 @@ export async function getTxEthValues(
 
   return values;
 }
+
+/**
+ * NFT transfers involving a wallet (both directions) since fromBlock.
+ * Used by the wallet-tracking worker.
+ */
+export interface WalletNftTransfer extends NftTransfer {
+  contractAddress: string;
+}
+
+export async function getWalletNftTransfers(
+  wallet: string,
+  fromBlock: number,
+  chain = 'ethereum'
+): Promise<WalletNftTransfer[]> {
+  const common = {
+    fromBlock: '0x' + fromBlock.toString(16),
+    toBlock: 'latest',
+    category: ['erc721', 'erc1155'],
+    withMetadata: true,
+    excludeZeroValue: false,
+    order: 'asc',
+    maxCount: '0x64',
+  };
+  const [incoming, outgoing] = await Promise.all([
+    rpcCall<any>(chain, 'alchemy_getAssetTransfers', [{ ...common, toAddress: wallet }]),
+    rpcCall<any>(chain, 'alchemy_getAssetTransfers', [{ ...common, fromAddress: wallet }]),
+  ]);
+
+  const map = (raw: any[]): WalletNftTransfer[] =>
+    raw.map((t: any) => {
+      const erc1155Entries: any[] = t.erc1155Metadata ?? [];
+      const amount = erc1155Entries.length
+        ? erc1155Entries.reduce((s, e) => s + (parseInt(e.value ?? '0x1', 16) || 1), 0)
+        : 1;
+      return {
+        txHash: t.hash,
+        blockNum: parseInt(t.blockNum, 16),
+        from: (t.from ?? '').toLowerCase(),
+        to: (t.to ?? '').toLowerCase(),
+        tokenId: t.tokenId ?? erc1155Entries[0]?.tokenId ?? null,
+        amount,
+        timestamp: t.metadata?.blockTimestamp ? new Date(t.metadata.blockTimestamp) : null,
+        contractAddress: (t.rawContract?.address ?? '').toLowerCase(),
+      };
+    });
+
+  const all = [
+    ...map(incoming?.transfers ?? []),
+    ...map(outgoing?.transfers ?? []),
+  ];
+  const seen = new Set<string>();
+  return all.filter((t) => {
+    const k = `${t.txHash}:${t.tokenId}:${t.to}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
