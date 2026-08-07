@@ -1,8 +1,6 @@
 import { Bot } from 'grammy';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 import { prisma } from '../../db/client.js';
-import { getERC721Owner, getCollectionHolders } from '../../services/holders/holder.service.js';
-import { formatERC721Owner, formatCollectionHolders } from '../../services/formatter/index.js';
 
 export function registerHoldersCommand(bot: Bot): void {
   bot.command('holders', requireApproved, async (ctx) => {
@@ -25,10 +23,11 @@ export function registerHoldersCommand(bot: Bot): void {
 
     const keyboard = items.map((item) => [
       {
+        // col_holders:<addr> = ~54 chars max ✓   nft_owner:<addr>:<tokenId> = ~56 chars ✓
         text: `👁 ${item.label ?? item.collectionSlug ?? `#${item.tokenId}`}`,
         callback_data: item.type === 'COLLECTION'
-          ? `view_holders_collection:${item.contractAddress}:${item.chain ?? 'ethereum'}`
-          : `view_holder_erc721:${item.contractAddress}:${item.tokenId}:${item.chain ?? 'ethereum'}`,
+          ? `col_holders:${item.contractAddress}`
+          : `nft_owner:${item.contractAddress}:${item.tokenId}`,
       },
     ]);
 

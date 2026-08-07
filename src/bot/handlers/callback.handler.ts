@@ -64,10 +64,11 @@ export function registerCallbackHandlers(bot: Bot): void {
     }
   });
 
-  // Track asset
-  bot.callbackQuery(/^track_asset:(.+):(\d+):(.+)$/, async (ctx) => {
+  // Track asset (chain dropped from callback to stay under 64-byte Telegram limit)
+  bot.callbackQuery(/^track_asset:(.+):(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery('Tracking...');
-    const [, contractAddress, tokenId, chain] = ctx.match!;
+    const [, contractAddress, tokenId] = ctx.match!;
+    const chain = 'ethereum';
     const from = ctx.from!;
     try {
       const result = await trackAsset({
@@ -100,10 +101,11 @@ export function registerCallbackHandlers(bot: Bot): void {
     await ctx.reply(`✅ Stopped tracking <b>${item.label ?? item.collectionSlug ?? `#${item.tokenId}`}</b>.`, { parse_mode: 'HTML' });
   });
 
-  // View ERC-721 owner
-  bot.callbackQuery(/^view_holder_erc721:(.+):(\d+):(.+)$/, async (ctx) => {
+  // View ERC-721 owner (nft_owner: prefix, chain defaulted to ethereum)
+  bot.callbackQuery(/^nft_owner:(.+):(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery('Loading...');
-    const [, contractAddress, tokenId, chain] = ctx.match!;
+    const [, contractAddress, tokenId] = ctx.match!;
+    const chain = 'ethereum';
     const data = await getERC721Owner(contractAddress, tokenId, chain);
     if (!data) {
       await ctx.reply('⚠️ Owner data unavailable right now. Please try again later.');
@@ -113,17 +115,18 @@ export function registerCallbackHandlers(bot: Bot): void {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🔄 Track Owner Change', callback_data: `track_asset:${contractAddress}:${tokenId}:${chain}` }],
+          [{ text: '🔄 Track Owner Change', callback_data: `track_asset:${contractAddress}:${tokenId}` }],
           [{ text: '🔙 Back', callback_data: 'cancel' }],
         ],
       },
     });
   });
 
-  // View collection holders
-  bot.callbackQuery(/^view_holders_collection:(.+):(.+)$/, async (ctx) => {
+  // View collection holders (col_holders: prefix, chain defaulted to ethereum)
+  bot.callbackQuery(/^col_holders:(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery('Loading...');
-    const [, contractAddress, chain] = ctx.match!;
+    const [, contractAddress] = ctx.match!;
+    const chain = 'ethereum';
     const data = await getCollectionHolders(contractAddress, chain);
     if (!data) {
       await ctx.reply('⚠️ Holder data unavailable right now. Please try again later.');
@@ -133,7 +136,7 @@ export function registerCallbackHandlers(bot: Bot): void {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🔄 Refresh', callback_data: `view_holders_collection:${contractAddress}:${chain}` }],
+          [{ text: '🔄 Refresh', callback_data: `col_holders:${contractAddress}` }],
           [{ text: '🔙 Back', callback_data: 'cancel' }],
         ],
       },

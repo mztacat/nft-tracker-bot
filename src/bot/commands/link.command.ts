@@ -44,8 +44,8 @@ export function registerLinkCommand(bot: Bot): void {
           reply_markup: {
             inline_keyboard: [
               [{ text: '📌 Track Collection', callback_data: `track_collection:${parsed.collectionSlug}:${parsed.chain}` }],
-              [{ text: '👥 View Holders', callback_data: `view_holders_collection:${data.contractAddress}:${parsed.chain}` }],
-              [{ text: '🔔 Notification Settings', callback_data: `notif_menu_collection:${parsed.collectionSlug}` }],
+              [{ text: '👥 View Holders', callback_data: `col_holders:${data.contractAddress}` }],
+              [{ text: '🔔 Notifications', callback_data: `notif_menu_col:${parsed.collectionSlug}` }],
               [{ text: '❌ Cancel', callback_data: 'cancel' }],
             ],
           },
@@ -66,10 +66,9 @@ export function registerLinkCommand(bot: Bot): void {
           parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [
-              [{ text: '📌 Track Asset', callback_data: `track_asset:${parsed.contractAddress}:${parsed.tokenId}:${parsed.chain}` }],
-              [{ text: '👤 View Holder/Owner', callback_data: `view_holder_erc721:${parsed.contractAddress}:${parsed.tokenId}:${parsed.chain}` }],
-              [{ text: '🔄 Track Owner Change', callback_data: `track_owner_change:${parsed.contractAddress}:${parsed.tokenId}` }],
-              [{ text: '🔔 Notification Settings', callback_data: `notif_menu_asset:${parsed.contractAddress}:${parsed.tokenId}` }],
+              [{ text: '📌 Track Asset', callback_data: `track_asset:${parsed.contractAddress}:${parsed.tokenId}` }],
+              [{ text: '👤 View Owner', callback_data: `nft_owner:${parsed.contractAddress}:${parsed.tokenId}` }],
+              [{ text: '🔔 Notifications', callback_data: `notif_menu_asset:${parsed.contractAddress}:${parsed.tokenId}` }],
               [{ text: '❌ Cancel', callback_data: 'cancel' }],
             ],
           },
@@ -78,12 +77,12 @@ export function registerLinkCommand(bot: Bot): void {
         await ctx.api.editMessageText(
           ctx.chat.id,
           waitMsg.message_id,
-          `📄 <b>Contract Address</b>\n\n<code>${parsed.contractAddress}</code>\nChain: ${parsed.chain}\n\nWhat would you like to do?`,
+          `📄 <b>Contract Address</b>\n\n<code>${parsed.contractAddress}</code>\n\nWhat would you like to do?`,
           {
             parse_mode: 'HTML',
             reply_markup: {
               inline_keyboard: [
-                [{ text: '👥 View Collection Holders', callback_data: `view_holders_collection:${parsed.contractAddress}:${parsed.chain}` }],
+                [{ text: '👥 View Collection Holders', callback_data: `col_holders:${parsed.contractAddress}` }],
                 [{ text: '❌ Cancel', callback_data: 'cancel' }],
               ],
             },
