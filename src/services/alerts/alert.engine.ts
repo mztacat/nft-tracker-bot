@@ -1,7 +1,7 @@
 import { prisma } from '../../db/client.js';
 import { logger } from '../../logger.js';
 import { Bot } from 'grammy';
-import { formatAlertFloorChange, formatAlertSale, formatOwnerChangeAlert, formatDigest } from '../formatter/index.js';
+import { formatAlertFloorChange, formatAlertSale, formatOwnerChangeAlert, formatDigest, formatWhaleBuyAlert } from '../formatter/index.js';
 
 const DAILY_ALERT_CAP = 100;
 
@@ -144,6 +144,37 @@ export async function processOwnerChangeAlert(params: {
       if (dbChat) await markAlertSent(trackedItemId, dbChat.id, 'OWNER_CHANGE', message);
     } catch (err) {
       logger.error({ err }, 'Failed to send owner change alert');
+    }
+  }
+}
+
+export async function processWhaleBuyAlert(params: {
+  trackedItemId: number;
+  telegramChatId: string;
+  collectionName: string;
+  buyer: string;
+  itemCount: number;
+  ethSpent: number | null;
+  txCount: number;
+  windowMinutes: number;
+  isSweep: boolean;
+}): Promise<void> {
+  const { trackedItemId, telegramChatId } = params;
+
+  const canSend = await canSendAlert(trackedItemId, 'WHALE_BUY', 5);
+  if (!canSend) return;
+
+  const withinCap = await checkDailyCapForChat(telegramChatId);
+  if (!withinCap) return;
+
+  const message = formatWhaleBuyAlert(params);
+  if (_bot) {
+    try {
+      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+      const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
+      if (dbChat) await markAlertSent(trackedItemId, dbChat.id, 'WHALE_BUY', message);
+    } catch (err) {
+      logger.error({ err, telegramChatId }, 'Failed to send whale buy alert');
     }
   }
 }

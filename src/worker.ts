@@ -4,6 +4,7 @@ import { connectDb, disconnectDb } from './db/client.js';
 import { runMarketWorker, runAssetWorker } from './workers/marketWorker.js';
 import { runHolderWorker } from './workers/holderWorker.js';
 import { runAlertWorker } from './workers/alertWorker.js';
+import { runWhaleWorker } from './workers/whaleWorker.js';
 import { logger } from './logger.js';
 import { config } from './config/index.js';
 import { createBot } from './bot/index.js';
@@ -38,6 +39,15 @@ async function main() {
       await runAssetWorker();
     } catch (err) {
       logger.error({ err }, 'Asset worker cron error');
+    }
+  });
+
+  // Whale-buy & sweep detection: every 1 minute for instant alerts
+  cron.schedule('*/1 * * * *', async () => {
+    try {
+      await runWhaleWorker();
+    } catch (err) {
+      logger.error({ err }, 'Whale worker cron error');
     }
   });
 

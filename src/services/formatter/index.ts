@@ -166,3 +166,24 @@ export function formatOwnerChangeAlert(collectionName: string, tokenId: string, 
     `To: <code>${shortAddr(newOwner)}</code>`,
   ].filter(Boolean).join('\n');
 }
+
+export function formatWhaleBuyAlert(params: {
+  collectionName: string;
+  buyer: string;
+  itemCount: number;
+  ethSpent: number | null;
+  txCount: number;
+  windowMinutes: number;
+  isSweep: boolean;
+}): string {
+  const { collectionName, buyer, itemCount, ethSpent, txCount, windowMinutes, isSweep } = params;
+  return [
+    isSweep ? `🧹 <b>Sweep Alert</b>` : `🐋 <b>Whale Buy Alert</b>`,
+    ``,
+    `Collection: <b>${escHtml(collectionName)}</b>`,
+    `Buyer: <code>${shortAddr(buyer)}</code>`,
+    `Items: <b>${itemCount}</b> in ${txCount} tx${txCount === 1 ? '' : 's'}`,
+    ethSpent != null && ethSpent > 0 ? `Spent: <b>${fmt(ethSpent)} ETH</b>` : null,
+    `Window: last ${windowMinutes} min`,
+  ].filter(Boolean).join('\n');
+}
