@@ -26,6 +26,39 @@ export function filterBuys(transfers: NftTransfer[]): NftTransfer[] {
   );
 }
 
+/**
+ * Keep only transfers inside the detection window. Transfers without a block
+ * timestamp are excluded — we can't prove they're recent, and alerting on
+ * stale activity is worse than missing an edge case.
+ */
+export function filterWithinWindow(
+  transfers: NftTransfer[],
+  windowMinutes: number,
+  now: Date = new Date()
+): NftTransfer[] {
+  const cutoff = now.getTime() - windowMinutes * 60_000;
+  return transfers.filter((t) => t.timestamp != null && t.timestamp.getTime() >= cutoff);
+}
+
+/**
+ * Compute the next block cursor after a poll.
+ * - Complete fetch: safe to jump to the chain head.
+ * - Incomplete fetch (RPC failure or pagination cap): only advance to the
+ *   last block actually received, so unseen transfers are re-fetched next
+ *   tick; if nothing was received, keep the previous cursor.
+ */
+export function nextCursor(params: {
+  complete: boolean;
+  latestBlock: number;
+  transfers: NftTransfer[];
+  prevCursor: number;
+}): number {
+  const { complete, latestBlock, transfers, prevCursor } = params;
+  if (complete) return latestBlock;
+  if (transfers.length === 0) return prevCursor;
+  return Math.max(prevCursor, ...transfers.map((t) => t.blockNum));
+}
+
 /** Group acquisitions by buyer wallet. */
 export function groupByBuyer(buys: NftTransfer[]): Map<string, NftTransfer[]> {
   const byBuyer = new Map<string, NftTransfer[]>();

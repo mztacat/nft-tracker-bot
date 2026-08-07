@@ -1,4 +1,4 @@
-import { detectWhaleBuys, filterBuys, groupByBuyer } from '../services/whale/whale.detector';
+import { detectWhaleBuys, filterBuys, filterWithinWindow, groupByBuyer, nextCursor } from '../services/whale/whale.detector';
 import type { NftTransfer } from '../services/providers/transfers';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -113,5 +113,51 @@ describe('detectWhaleBuys', () => {
     expect(res).toHaveLength(1);
     expect(res[0].ethSpent).toBe(6);
     expect(res[0].txHashes).toEqual(['0xsame']);
+  });
+});
+
+describe('filterWithinWindow', () => {
+  const now = new Date('2026-08-07T12:00:00Z');
+
+  it('keeps transfers inside the window and drops older ones', () => {
+    const transfers = [
+      tf({ txHash: '0xrecent', timestamp: new Date('2026-08-07T11:55:00Z') }),
+      tf({ txHash: '0xold', timestamp: new Date('2026-08-07T11:30:00Z') }),
+    ];
+    const res = filterWithinWindow(transfers, 10, now);
+    expect(res).toHaveLength(1);
+    expect(res[0].txHash).toBe('0xrecent');
+  });
+
+  it('excludes transfers without a timestamp', () => {
+    const transfers = [tf({ txHash: '0xnots', timestamp: null })];
+    expect(filterWithinWindow(transfers, 10, now)).toHaveLength(0);
+  });
+
+  it('drops all stale transfers after a delayed catch-up scan', () => {
+    const transfers = Array.from({ length: 5 }, (_, i) =>
+      tf({ txHash: `0x${i}`, timestamp: new Date('2026-08-07T09:00:00Z') })
+    );
+    expect(filterWithinWindow(transfers, 10, now)).toHaveLength(0);
+  });
+});
+
+describe('nextCursor', () => {
+  it('jumps to chain head on a complete fetch', () => {
+    expect(nextCursor({ complete: true, latestBlock: 500, transfers: [], prevCursor: 100 })).toBe(500);
+  });
+
+  it('keeps the previous cursor when an incomplete fetch returned nothing (RPC failure)', () => {
+    expect(nextCursor({ complete: false, latestBlock: 500, transfers: [], prevCursor: 100 })).toBe(100);
+  });
+
+  it('advances only to the last fetched block when pagination overflowed', () => {
+    const transfers = [tf({ blockNum: 150 }), tf({ blockNum: 180 })];
+    expect(nextCursor({ complete: false, latestBlock: 500, transfers, prevCursor: 100 })).toBe(180);
+  });
+
+  it('never moves the cursor backwards', () => {
+    const transfers = [tf({ blockNum: 90 })];
+    expect(nextCursor({ complete: false, latestBlock: 500, transfers, prevCursor: 100 })).toBe(100);
   });
 });

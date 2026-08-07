@@ -7,7 +7,13 @@ import {
   getTxEthValues,
 } from '../services/providers/transfers.js';
 import { processWhaleBuyAlert } from '../services/alerts/alert.engine.js';
-import { detectWhaleBuys, filterBuys, groupByBuyer } from '../services/whale/whale.detector.js';
+import {
+  detectWhaleBuys,
+  filterBuys,
+  filterWithinWindow,
+  groupByBuyer,
+  nextCursor,
+} from '../services/whale/whale.detector.js';
 
 const CURSOR_SCOPE = 'whale_cursor';
 const FIRST_RUN_LOOKBACK_BLOCKS = 50; // ~10 minutes on Ethereum
@@ -82,11 +88,26 @@ export async function runWhaleWorker(): Promise<void> {
         fromBlock = latestBlock - MAX_LOOKBACK_BLOCKS;
       }
 
-      const transfers = await getNftTransfersSince(contractAddress, fromBlock + 1, chain);
-      await setCursor(item.id, latestBlock);
+      const { transfers, complete } = await getNftTransfersSince(contractAddress, fromBlock + 1, chain);
+
+      // Only advance the cursor as far as we actually fetched — an RPC
+      // failure or pagination cap must not permanently skip transfers
+      const newCursor = nextCursor({ complete, latestBlock, transfers, prevCursor: fromBlock });
+      if (newCursor !== fromBlock) await setCursor(item.id, newCursor);
+      if (!complete) {
+        logger.warn(
+          { itemId: item.id, fetched: transfers.length, newCursor },
+          'Whale worker: incomplete transfer fetch, will resume next tick'
+        );
+      }
       if (transfers.length === 0) continue;
 
-      const buys = filterBuys(transfers);
+      // Enforce the detection window: never alert on stale activity pulled
+      // in by a large catch-up scan after downtime
+      const recent = filterWithinWindow(transfers, WINDOW_MINUTES);
+      if (recent.length === 0) continue;
+
+      const buys = filterBuys(recent);
       if (buys.length === 0) continue;
 
       const whaleNotif = item.notificationSettings.find(

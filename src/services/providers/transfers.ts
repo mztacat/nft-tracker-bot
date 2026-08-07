@@ -56,6 +56,16 @@ export async function getLatestBlockNumber(chain = 'ethereum'): Promise<number |
   return hex ? parseInt(hex, 16) : null;
 }
 
+export interface TransfersResult {
+  transfers: NftTransfer[];
+  /**
+   * True only when every page was fetched successfully and pagination
+   * finished. When false, callers must NOT advance their block cursor past
+   * the last transfer actually received, or events will be lost.
+   */
+  complete: boolean;
+}
+
 /**
  * Fetch ERC721/ERC1155 transfers for a contract from a given block (inclusive)
  * using alchemy_getAssetTransfers. Paginates up to `maxPages` pages.
@@ -65,9 +75,10 @@ export async function getNftTransfersSince(
   fromBlock: number,
   chain = 'ethereum',
   maxPages = 3
-): Promise<NftTransfer[]> {
+): Promise<TransfersResult> {
   const transfers: NftTransfer[] = [];
   let pageKey: string | undefined;
+  let complete = false;
 
   for (let page = 0; page < maxPages; page++) {
     const result = await rpcCall<any>(chain, 'alchemy_getAssetTransfers', [
@@ -102,10 +113,13 @@ export async function getNftTransfersSince(
     }
 
     pageKey = result.pageKey;
-    if (!pageKey) break;
+    if (!pageKey) {
+      complete = true;
+      break;
+    }
   }
 
-  return transfers;
+  return { transfers, complete };
 }
 
 /**
