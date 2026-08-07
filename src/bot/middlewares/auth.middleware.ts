@@ -58,23 +58,33 @@ export async function requireApproved(ctx: Context, next: NextFunction): Promise
     return next();
   }
 
+  const isCommand = (ctx.message?.text ?? '').startsWith('/');
+
+  // Group/channel: the chat approval is what matters — any member of an
+  // approved group can use the bot there.
+  if (ctx.chat && ctx.chat.type !== 'private') {
+    const chat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat.id) } });
+    if (chat?.isApproved) {
+      return next();
+    }
+    // Unapproved group: only speak up when someone explicitly invokes a
+    // command — never nag on regular conversation.
+    if (isCommand) {
+      await ctx.reply(
+        `⛔ This group/channel is not approved to use the bot.\n\nChat id: <code>${ctx.chat.id}</code>\nAn admin can approve it with:\n<code>/approvegroup ${ctx.chat.id}</code>`,
+        { parse_mode: 'HTML' }
+      );
+    }
+    return;
+  }
+
+  // Private chat: per-user approval
   const user = await prisma.user.findUnique({ where: { telegramId: String(from.id) } });
   if (!user || !user.isApproved) {
     await ctx.reply(
       '⛔ You do not have access to this bot.\n\nUse /request to request access from the administrator.'
     );
     return;
-  }
-
-  if (ctx.chat && ctx.chat.type !== 'private') {
-    const chat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat.id) } });
-    if (!chat || !chat.isApproved) {
-      await ctx.reply(
-        `⛔ This group/channel is not approved to use the bot.\n\nChat id: <code>${ctx.chat.id}</code>\nAn admin can approve it with:\n<code>/approvegroup ${ctx.chat.id}</code>`,
-        { parse_mode: 'HTML' }
-      );
-      return;
-    }
   }
 
   return next();
