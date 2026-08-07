@@ -4,10 +4,10 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl
 
-COPY package*.json ./
+COPY package.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm install
 
 RUN npx prisma generate
 
@@ -24,10 +24,10 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl
 
-COPY package*.json ./
+COPY package.json ./
 COPY prisma ./prisma/
 
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 RUN npx prisma generate
 
