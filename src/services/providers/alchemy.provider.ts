@@ -2,6 +2,7 @@ import { NftDataProvider, CollectionData, AssetData, ERC721OwnerData, ERC1155Hol
 import { config } from '../../config/index.js';
 import { logger } from '../../logger.js';
 import { getOpenSeaCollection, getOpenSeaStats, openSeaAvailable } from './opensea.enhancer.js';
+import { getCoinGeckoNftStats, coinGeckoAvailable } from './coingecko.enhancer.js';
 
 const CHAIN_HOSTS: Record<string, string> = {
   ethereum: 'eth-mainnet.g.alchemy.com',
@@ -124,18 +125,26 @@ export class AlchemyProvider implements NftDataProvider {
       contractAddress = resolved;
     }
 
-    const [meta, floor, owners] = await Promise.all([
+    // CoinGecko enhancer: fills stats by contract address when OpenSea isn't configured
+    const cgPromise =
+      !osStats && coinGeckoAvailable()
+        ? getCoinGeckoNftStats(contractAddress, chain)
+        : Promise.resolve(null);
+
+    const [meta, floor, owners, cgStats] = await Promise.all([
       alchemyFetch<any>(`${base}/getContractMetadata?contractAddress=${contractAddress}`),
       alchemyFetch<any>(`${base}/getFloorPrice?contractAddress=${contractAddress}`),
       osStats?.numOwners != null
         ? Promise.resolve(null)
         : alchemyFetch<any>(`${base}/getOwnersForContract?contractAddress=${contractAddress}`),
+      cgPromise,
     ]);
 
     if (!meta && !osInfo) return null;
 
     const floorPrice =
       osStats?.floorPrice ??
+      cgStats?.floorPrice ??
       floor?.openSea?.floorPrice ??
       floor?.looksRare?.floorPrice ??
       null;
@@ -146,12 +155,12 @@ export class AlchemyProvider implements NftDataProvider {
       chain,
       contractAddress,
       floorPrice,
-      volume24h:       osStats?.volume24h ?? null,
-      sales24h:        osStats?.sales24h ?? null,
-      floorChange24h:  null,
+      volume24h:       osStats?.volume24h ?? cgStats?.volume24h ?? null,
+      sales24h:        osStats?.sales24h ?? cgStats?.sales24h ?? null,
+      floorChange24h:  cgStats?.floorChange24h ?? null,
       volumeChange24h: osStats?.volumeChange24h ?? null,
       listingsCount:   null,
-      holdersCount:    osStats?.numOwners ?? (Array.isArray(owners?.owners) ? owners.owners.length : null),
+      holdersCount:    osStats?.numOwners ?? cgStats?.numOwners ?? (Array.isArray(owners?.owners) ? owners.owners.length : null),
       totalSupply:     osInfo?.totalSupply ?? (meta?.totalSupply ? Number(meta.totalSupply) : null),
       imageUrl:        osInfo?.imageUrl ?? meta?.openSeaMetadata?.imageUrl ?? undefined,
       description:     osInfo?.description ?? meta?.openSeaMetadata?.description ?? undefined,
