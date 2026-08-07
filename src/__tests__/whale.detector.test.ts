@@ -1,10 +1,12 @@
-import { detectWhaleBuys, excludeSeenTxs, filterBuys, filterWithinWindow, groupByBuyer, nextCursor } from '../services/whale/whale.detector';
+import { detectWhaleBuys, excludeSeenTransfers, filterBuys, filterWithinWindow, groupByBuyer, nextCursor } from '../services/whale/whale.detector';
 import type { NftTransfer } from '../services/providers/transfers';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
 
+let _seq = 0;
 function tf(overrides: Partial<NftTransfer>): NftTransfer {
   return {
+    uniqueId: `uid-${_seq++}`,
     txHash: '0xtx1',
     blockNum: 100,
     from: '0xseller',
@@ -164,33 +166,35 @@ describe('nextCursor', () => {
 });
 
 describe('pagination boundary bisecting a block (two-tick integration)', () => {
-  it('detects every transfer exactly once across ticks with overlap + dedupe', () => {
-    // Block 180 contains 3 transfers; tick 1's pagination cap bisects it
+  it('detects every transfer exactly once, including multiple transfers under one sweep tx', () => {
+    // One sweep tx 0xsweep in block 180 emits THREE transfers; tick 1's
+    // pagination cap bisects the block mid-transaction
     const all = [
-      tf({ txHash: '0xa', blockNum: 170, tokenId: '1', timestamp: new Date() }),
-      tf({ txHash: '0xb', blockNum: 180, tokenId: '2', timestamp: new Date() }),
-      tf({ txHash: '0xc', blockNum: 180, tokenId: '3', timestamp: new Date() }),
-      tf({ txHash: '0xd', blockNum: 180, tokenId: '4', timestamp: new Date() }),
+      tf({ uniqueId: '0xa:log:1', txHash: '0xa', blockNum: 170, tokenId: '1', timestamp: new Date() }),
+      tf({ uniqueId: '0xsweep:log:1', txHash: '0xsweep', blockNum: 180, tokenId: '2', timestamp: new Date() }),
+      tf({ uniqueId: '0xsweep:log:2', txHash: '0xsweep', blockNum: 180, tokenId: '3', timestamp: new Date() }),
+      tf({ uniqueId: '0xsweep:log:3', txHash: '0xsweep', blockNum: 180, tokenId: '4', timestamp: new Date() }),
     ];
 
-    // Tick 1: incomplete fetch received only part of block 180
-    const tick1 = all.slice(0, 2); // 0xa (block 170), 0xb (block 180 partial)
+    // Tick 1: incomplete fetch received only part of block 180 (mid-tx split)
+    const tick1 = all.slice(0, 2);
     const cursor1 = nextCursor({ complete: false, latestBlock: 500, transfers: tick1, prevCursor: 100 });
     expect(cursor1).toBe(179); // resume from block 180 next tick
 
     const seen = new Set<string>();
-    const fresh1 = excludeSeenTxs(tick1, seen);
-    expect(fresh1.map((t) => t.txHash)).toEqual(['0xa', '0xb']);
-    fresh1.forEach((t) => seen.add(t.txHash)); // recorded as market events
+    const fresh1 = excludeSeenTransfers(tick1, seen);
+    expect(fresh1.map((t) => t.uniqueId)).toEqual(['0xa:log:1', '0xsweep:log:1']);
+    fresh1.forEach((t) => seen.add(t.uniqueId)); // recorded as market events
 
-    // Tick 2: fetch from cursor1 + 1 = block 180, complete — returns ALL of block 180
+    // Tick 2: fetch from cursor1 + 1 = block 180, complete — full block returned
     const tick2 = all.filter((t) => t.blockNum >= cursor1 + 1);
-    expect(tick2.map((t) => t.txHash)).toEqual(['0xb', '0xc', '0xd']);
+    expect(tick2).toHaveLength(3);
 
-    const fresh2 = excludeSeenTxs(tick2, seen);
-    // 0xb was already processed in tick 1 — only the missed transfers surface
-    expect(fresh2.map((t) => t.txHash)).toEqual(['0xc', '0xd']);
-    fresh2.forEach((t) => seen.add(t.txHash));
+    // Tx-hash dedupe would wrongly drop ALL of 0xsweep; uniqueId keeps the
+    // two transfers pagination previously cut off
+    const fresh2 = excludeSeenTransfers(tick2, seen);
+    expect(fresh2.map((t) => t.uniqueId)).toEqual(['0xsweep:log:2', '0xsweep:log:3']);
+    fresh2.forEach((t) => seen.add(t.uniqueId));
 
     // Every transfer processed exactly once
     expect(seen.size).toBe(4);

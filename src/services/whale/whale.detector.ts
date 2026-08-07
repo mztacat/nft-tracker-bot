@@ -64,11 +64,16 @@ export function nextCursor(params: {
 }
 
 /**
- * Drop transfers whose tx hash was already processed (recorded as a market
- * event). Needed because incomplete fetches re-scan the boundary block.
+ * Drop transfers already processed for THIS tracked item, identified by their
+ * stable per-transfer uniqueId (tx hash + log index), never tx hash alone —
+ * a sweep tx emits many transfers and pagination can split them mid-tx.
+ * Needed because incomplete fetches re-scan the boundary block.
  */
-export function excludeSeenTxs(transfers: NftTransfer[], seenTxHashes: Set<string>): NftTransfer[] {
-  return transfers.filter((t) => !seenTxHashes.has(t.txHash));
+export function excludeSeenTransfers(
+  transfers: NftTransfer[],
+  seenUniqueIds: Set<string>
+): NftTransfer[] {
+  return transfers.filter((t) => !seenUniqueIds.has(t.uniqueId));
 }
 
 /** Group acquisitions by buyer wallet. */

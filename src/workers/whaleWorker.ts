@@ -9,7 +9,7 @@ import {
 import { processWhaleBuyAlert } from '../services/alerts/alert.engine.js';
 import {
   detectWhaleBuys,
-  excludeSeenTxs,
+  excludeSeenTransfers,
   filterBuys,
   filterWithinWindow,
   groupByBuyer,
@@ -125,15 +125,26 @@ async function runWhaleWorkerInner(): Promise<void> {
       const recent = filterWithinWindow(transfers, WINDOW_MINUTES);
       if (recent.length === 0) continue;
 
-      // Incomplete fetches re-scan the boundary block; drop transfers whose
-      // tx hash was already recorded so overlap never double-counts
+      // Incomplete fetches re-scan the boundary block; drop transfers this
+      // item already processed. Dedupe is scoped PER tracked item (assetId
+      // marker) so other chats tracking the same collection still alert, and
+      // keyed by per-transfer uniqueId, never tx hash alone (a sweep tx
+      // emits many transfers and pagination can split them mid-tx).
       const candidateHashes = [...new Set(recent.map((t) => t.txHash))];
       const seenEvents = await prisma.marketEvent.findMany({
-        where: { collectionId: contractAddress, txHash: { in: candidateHashes } },
-        select: { txHash: true },
+        where: {
+          assetId: `item:${item.id}`,
+          eventType: 'WHALE_BUY',
+          txHash: { in: candidateHashes },
+        },
+        select: { rawJson: true },
       });
-      const seen = new Set(seenEvents.map((e) => e.txHash).filter((h): h is string => h != null));
-      const fresh = excludeSeenTxs(recent, seen);
+      const seen = new Set<string>(
+        seenEvents
+          .map((e) => (e.rawJson as any)?.uniqueId)
+          .filter((u): u is string => typeof u === 'string')
+      );
+      const fresh = excludeSeenTransfers(recent, seen);
       if (fresh.length === 0) continue;
 
       const buys = filterBuys(fresh);
@@ -169,12 +180,13 @@ async function runWhaleWorkerInner(): Promise<void> {
         await prisma.marketEvent.createMany({
           data: buyerTransfers.map((t) => ({
             collectionId: contractAddress,
+            assetId: `item:${item.id}`, // per-item dedupe scope
             eventType: 'WHALE_BUY',
             buyer,
             seller: t.from,
             txHash: t.txHash,
             timestamp: t.timestamp ?? new Date(),
-            rawJson: { tokenId: t.tokenId, amount: t.amount, blockNum: t.blockNum },
+            rawJson: { uniqueId: t.uniqueId, tokenId: t.tokenId, amount: t.amount, blockNum: t.blockNum },
           })),
         });
 

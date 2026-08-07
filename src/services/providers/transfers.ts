@@ -42,6 +42,8 @@ async function rpcCall<T>(chain: string, method: string, params: unknown[]): Pro
 }
 
 export interface NftTransfer {
+  /** Stable per-transfer identity (Alchemy uniqueId: "<txHash>:log:<index>"). */
+  uniqueId: string;
   txHash: string;
   blockNum: number;
   from: string;
@@ -101,7 +103,9 @@ export async function getNftTransfersSince(
       const amount = erc1155Entries.length
         ? erc1155Entries.reduce((s, e) => s + (parseInt(e.value ?? '0x1', 16) || 1), 0)
         : 1;
+      const tokenKey = t.tokenId ?? erc1155Entries[0]?.tokenId ?? '';
       transfers.push({
+        uniqueId: t.uniqueId ?? `${t.hash}:${tokenKey}:${t.blockNum}`,
         txHash: t.hash,
         blockNum: parseInt(t.blockNum, 16),
         from: (t.from ?? '').toLowerCase(),
@@ -177,7 +181,9 @@ export async function getWalletNftTransfers(
       const amount = erc1155Entries.length
         ? erc1155Entries.reduce((s, e) => s + (parseInt(e.value ?? '0x1', 16) || 1), 0)
         : 1;
+      const tokenKey = t.tokenId ?? erc1155Entries[0]?.tokenId ?? '';
       return {
+        uniqueId: t.uniqueId ?? `${t.hash}:${tokenKey}:${t.blockNum}`,
         txHash: t.hash,
         blockNum: parseInt(t.blockNum, 16),
         from: (t.from ?? '').toLowerCase(),
