@@ -41,11 +41,14 @@ export function filterWithinWindow(
 }
 
 /**
- * Compute the next block cursor after a poll.
+ * Compute the next block cursor after a poll. Pollers fetch from
+ * `cursor + 1`, so the cursor is the last FULLY processed block.
  * - Complete fetch: safe to jump to the chain head.
- * - Incomplete fetch (RPC failure or pagination cap): only advance to the
- *   last block actually received, so unseen transfers are re-fetched next
- *   tick; if nothing was received, keep the previous cursor.
+ * - Incomplete fetch (RPC failure or pagination cap): pagination can bisect
+ *   a block, so the highest received block may be only partially fetched.
+ *   Resume from just BEFORE it (maxBlock - 1) so the boundary block is
+ *   re-fetched in full next tick; callers must deduplicate the overlap by
+ *   tx hash. If nothing was received, keep the previous cursor.
  */
 export function nextCursor(params: {
   complete: boolean;
@@ -56,7 +59,16 @@ export function nextCursor(params: {
   const { complete, latestBlock, transfers, prevCursor } = params;
   if (complete) return latestBlock;
   if (transfers.length === 0) return prevCursor;
-  return Math.max(prevCursor, ...transfers.map((t) => t.blockNum));
+  const maxBlock = Math.max(...transfers.map((t) => t.blockNum));
+  return Math.max(prevCursor, maxBlock - 1);
+}
+
+/**
+ * Drop transfers whose tx hash was already processed (recorded as a market
+ * event). Needed because incomplete fetches re-scan the boundary block.
+ */
+export function excludeSeenTxs(transfers: NftTransfer[], seenTxHashes: Set<string>): NftTransfer[] {
+  return transfers.filter((t) => !seenTxHashes.has(t.txHash));
 }
 
 /** Group acquisitions by buyer wallet. */

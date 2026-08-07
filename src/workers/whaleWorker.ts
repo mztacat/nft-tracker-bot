@@ -9,6 +9,7 @@ import {
 import { processWhaleBuyAlert } from '../services/alerts/alert.engine.js';
 import {
   detectWhaleBuys,
+  excludeSeenTxs,
   filterBuys,
   filterWithinWindow,
   groupByBuyer,
@@ -124,7 +125,18 @@ async function runWhaleWorkerInner(): Promise<void> {
       const recent = filterWithinWindow(transfers, WINDOW_MINUTES);
       if (recent.length === 0) continue;
 
-      const buys = filterBuys(recent);
+      // Incomplete fetches re-scan the boundary block; drop transfers whose
+      // tx hash was already recorded so overlap never double-counts
+      const candidateHashes = [...new Set(recent.map((t) => t.txHash))];
+      const seenEvents = await prisma.marketEvent.findMany({
+        where: { collectionId: contractAddress, txHash: { in: candidateHashes } },
+        select: { txHash: true },
+      });
+      const seen = new Set(seenEvents.map((e) => e.txHash).filter((h): h is string => h != null));
+      const fresh = excludeSeenTxs(recent, seen);
+      if (fresh.length === 0) continue;
+
+      const buys = filterBuys(fresh);
       if (buys.length === 0) continue;
 
       const whaleNotif = item.notificationSettings.find(
