@@ -324,3 +324,17 @@ Use the Telegram chat ID (starts with `-100` for groups/channels).
 ## License
 
 MIT
+
+## Troubleshooting: Prisma P1000 (database authentication failed)
+
+Postgres only applies `POSTGRES_PASSWORD` when its data volume is FIRST
+initialized. If the volume was created with an old password and `.env` now
+holds a different one, bot/worker restart-loop with Prisma P1000. Fix without
+losing data:
+
+```sh
+sh scripts/fix-db-password.sh
+```
+
+This updates the `nftbot` role password inside the running db container to
+match `.env`, then recreates bot and worker.
