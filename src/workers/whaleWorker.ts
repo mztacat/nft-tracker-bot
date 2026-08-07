@@ -7,8 +7,8 @@ import {
   getTxEthValues,
 } from '../services/providers/transfers.js';
 import { processWhaleBuyAlert } from '../services/alerts/alert.engine.js';
+import { detectWhaleBuys, filterBuys, groupByBuyer } from '../services/whale/whale.detector.js';
 
-const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
 const CURSOR_SCOPE = 'whale_cursor';
 const FIRST_RUN_LOOKBACK_BLOCKS = 50; // ~10 minutes on Ethereum
 const MAX_LOOKBACK_BLOCKS = 2000;     // don't scan huge ranges after downtime
@@ -86,49 +86,34 @@ export async function runWhaleWorker(): Promise<void> {
       await setCursor(item.id, latestBlock);
       if (transfers.length === 0) continue;
 
-      // Only market-style acquisitions: exclude mints and burns
-      const buys = transfers.filter(
-        (t) => t.to && t.to !== ZERO_ADDR && t.from !== ZERO_ADDR && t.to !== t.from
-      );
+      const buys = filterBuys(transfers);
       if (buys.length === 0) continue;
-
-      // Group by buyer wallet
-      const byBuyer = new Map<string, typeof buys>();
-      for (const t of buys) {
-        const list = byBuyer.get(t.to) ?? [];
-        list.push(t);
-        byBuyer.set(t.to, list);
-      }
 
       const whaleNotif = item.notificationSettings.find(
         (s) => s.eventType === 'WHALE_BUY' && s.enabled
       );
-      const thresholds = (whaleNotif?.thresholdJson as any) ?? {};
-      const minItems = thresholds.minItems ?? DEFAULT_MIN_ITEMS;
-      const minEth = thresholds.minEth ?? DEFAULT_MIN_ETH;
+      const rawThresholds = (whaleNotif?.thresholdJson as any) ?? {};
+      const thresholds = {
+        minItems: rawThresholds.minItems ?? DEFAULT_MIN_ITEMS,
+        minEth: rawThresholds.minEth ?? DEFAULT_MIN_ETH,
+      };
 
-      for (const [buyer, buyerTransfers] of byBuyer) {
+      // Fetch tx ETH values only for candidate groups (count near threshold
+      // or few txs) to avoid RPC waste on airdrop fan-outs
+      const candidateTxHashes: string[] = [];
+      for (const [, buyerTransfers] of groupByBuyer(buys)) {
         const itemCount = buyerTransfers.reduce((s, t) => s + t.amount, 0);
         const txHashes = [...new Set(buyerTransfers.map((t) => t.txHash))];
-
-        // Candidate check: only fetch tx values when the item count is close
-        // to threshold or there are few txs (avoid RPC waste on airdrops)
-        let ethSpent: number | null = null;
-        const isSweepCandidate = itemCount >= minItems;
-        if (isSweepCandidate || txHashes.length <= 5) {
-          const values = await getTxEthValues(txHashes, chain);
-          ethSpent = [...values.values()].reduce((s, v) => s + v, 0);
+        if (itemCount >= thresholds.minItems || txHashes.length <= 5) {
+          candidateTxHashes.push(...txHashes);
         }
+      }
+      const txEthValues = await getTxEthValues(candidateTxHashes, chain);
 
-        const isWhaleSpend = ethSpent != null && ethSpent >= minEth;
-        if (!isSweepCandidate && !isWhaleSpend) continue;
+      const detections = detectWhaleBuys(buys, thresholds, txEthValues);
 
-        // Airdrop/transfer guard: sweep alerts require actual spend unless
-        // spend data is unavailable and the count is well above threshold
-        if (isSweepCandidate && !isWhaleSpend && (ethSpent ?? 0) === 0 && itemCount < minItems * 2) {
-          logger.debug({ buyer, itemCount }, 'Whale worker: zero-spend group skipped (likely transfer/airdrop)');
-          continue;
-        }
+      for (const det of detections) {
+        const { buyer, itemCount, txHashes, ethSpent, isSweep, transfers: buyerTransfers } = det;
 
         // Record market events for downstream digests/analytics
         await prisma.marketEvent.createMany({
@@ -152,7 +137,7 @@ export async function runWhaleWorker(): Promise<void> {
           ethSpent,
           txCount: txHashes.length,
           windowMinutes: WINDOW_MINUTES,
-          isSweep: isSweepCandidate,
+          isSweep,
         });
       }
     } catch (err) {
