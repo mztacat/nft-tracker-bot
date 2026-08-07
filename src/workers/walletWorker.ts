@@ -4,6 +4,7 @@ import { config } from '../config/index.js';
 import { getLatestBlockNumber, getWalletNftTransfers } from '../services/providers/transfers.js';
 import { processGenericAlert } from '../services/alerts/alert.engine.js';
 import { formatWalletActivityAlert } from '../services/formatter/index.js';
+import { getContractName } from '../services/providers/contractName.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
 const LOOKBACK_BLOCKS = 25;
@@ -53,11 +54,14 @@ export async function runWalletWorker(): Promise<void> {
       }
 
       for (const g of groups.values()) {
+        const realName = g.contract ? await getContractName(g.contract, item.chain ?? 'ethereum') : null;
         const message = formatWalletActivityAlert({
           wallet,
           label: item.label,
           direction: g.direction,
-          collectionName: g.contract ? `${g.contract.slice(0, 6)}…${g.contract.slice(-4)}` : 'Unknown',
+          collectionName:
+            realName ?? (g.contract ? `${g.contract.slice(0, 6)}…${g.contract.slice(-4)}` : 'Unknown'),
+          contractAddress: g.contract || null,
           tokenIds: g.tokenIds,
           txHash: g.txHash,
         });

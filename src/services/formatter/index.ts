@@ -178,24 +178,46 @@ export function formatWhaleAlert(params: {
   ].filter(Boolean).join('\n');
 }
 
+function normalizeTokenId(tokenId: string): string {
+  if (/^0x[0-9a-fA-F]+$/.test(tokenId)) {
+    try {
+      return BigInt(tokenId).toString(10);
+    } catch {
+      return tokenId;
+    }
+  }
+  return tokenId;
+}
+
 export function formatWalletActivityAlert(params: {
   wallet: string;
   label?: string | null;
   direction: 'in' | 'out';
   collectionName: string;
+  contractAddress?: string | null;
   tokenIds: string[];
   txHash: string;
 }): string {
-  const { wallet, label, direction, collectionName, tokenIds, txHash } = params;
-  const sample = tokenIds.slice(0, 5).map((t) => `#${t}`).join(', ');
+  const { wallet, label, direction, collectionName, contractAddress, tokenIds, txHash } = params;
+  const ids = tokenIds.map(normalizeTokenId);
+  const sample = ids
+    .slice(0, 5)
+    .map((id) =>
+      contractAddress
+        ? `<a href="https://opensea.io/assets/ethereum/${contractAddress}/${id}">#${id}</a>`
+        : `#${id}`
+    )
+    .join(', ');
   return [
     `${direction === 'in' ? '🟢' : '🔴'} <b>Wallet ${direction === 'in' ? 'Acquired' : 'Sent'} NFTs</b>`,
     ``,
     `Wallet  <code>${shortAddr(wallet)}</code>${label ? ` (${escHtml(label)})` : ''}`,
     `Collection  <b>${escHtml(collectionName)}</b>`,
-    `Tokens  ${sample}${tokenIds.length > 5 ? ` +${tokenIds.length - 5} more` : ''}`,
+    `Tokens  ${sample}${ids.length > 5 ? ` +${ids.length - 5} more` : ''}`,
     ``,
-    `<a href="https://etherscan.io/tx/${txHash}">Transaction</a>`,
+    `<a href="https://etherscan.io/tx/${txHash}">Transaction</a>${
+      contractAddress ? `  ·  <a href="https://opensea.io/assets/ethereum/${contractAddress}/${ids[0]}">View on OpenSea</a>` : ''
+    }`,
   ].join('\n');
 }
 
