@@ -27,8 +27,67 @@ export interface CoinGeckoNftStats {
   numOwners: number | null;
 }
 
+// CoinGecko's public API works without a key (lower rate limit);
+// a free demo key raises the limit, so we always consider it available.
 export function coinGeckoAvailable(): boolean {
-  return Boolean(config.COINGECKO_API_KEY);
+  return true;
+}
+
+function cgHeaders(): Record<string, string> {
+  const h: Record<string, string> = { accept: 'application/json' };
+  if (config.COINGECKO_API_KEY) h['x-cg-demo-api-key'] = config.COINGECKO_API_KEY;
+  return h;
+}
+
+export interface CoinGeckoNftInfo extends CoinGeckoNftStats {
+  name: string;
+  contractAddress: string;
+  chain: string;
+  imageUrl?: string;
+  description?: string;
+  totalSupply: number | null;
+}
+
+const slugCache = new Map<string, { data: CoinGeckoNftInfo | null; ts: number }>();
+
+/**
+ * Resolve an OpenSea-style slug directly: CoinGecko NFT ids match OpenSea
+ * slugs (e.g. "kaito-genesis"), and the response carries the contract
+ * address plus full market stats in one call.
+ */
+export async function getCoinGeckoNftBySlug(slug: string): Promise<CoinGeckoNftInfo | null> {
+  const cached = slugCache.get(slug);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
+
+  try {
+    const res = await fetch(`${CG_BASE}/nfts/${encodeURIComponent(slug)}`, { headers: cgHeaders() });
+    if (!res.ok) {
+      logger.warn({ slug, status: res.status }, 'CoinGecko NFT slug lookup non-OK');
+      if (res.status === 404) slugCache.set(slug, { data: null, ts: Date.now() });
+      return null;
+    }
+    const d: any = await res.json();
+    if (!d.contract_address) return null;
+
+    const info: CoinGeckoNftInfo = {
+      name: d.name ?? slug,
+      contractAddress: d.contract_address,
+      chain: d.asset_platform_id === 'ethereum' ? 'ethereum' : d.asset_platform_id,
+      imageUrl: d.image?.small_2x ?? d.image?.small ?? undefined,
+      description: d.description ?? undefined,
+      totalSupply: d.total_supply != null ? Number(d.total_supply) : null,
+      floorPrice: d.floor_price?.native_currency ?? null,
+      floorChange24h: d.floor_price_24h_percentage_change?.native_currency ?? null,
+      volume24h: d.volume_24h?.native_currency ?? null,
+      sales24h: d.one_day_sales ?? null,
+      numOwners: d.number_of_unique_addresses ?? null,
+    };
+    slugCache.set(slug, { data: info, ts: Date.now() });
+    return info;
+  } catch (err) {
+    logger.error({ err, slug }, 'CoinGecko slug lookup error');
+    return null;
+  }
 }
 
 // Cache to respect the demo tier's 30 req/min limit
@@ -47,12 +106,7 @@ export async function getCoinGeckoNftStats(
   try {
     const res = await fetch(
       `${CG_BASE}/nfts/${platform}/contract/${contractAddress}`,
-      {
-        headers: {
-          accept: 'application/json',
-          'x-cg-demo-api-key': config.COINGECKO_API_KEY!,
-        },
-      }
+      { headers: cgHeaders() }
     );
     if (!res.ok) {
       logger.warn({ contractAddress, status: res.status }, 'CoinGecko NFT API non-OK response');

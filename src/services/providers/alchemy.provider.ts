@@ -2,7 +2,7 @@ import { NftDataProvider, CollectionData, AssetData, ERC721OwnerData, ERC1155Hol
 import { config } from '../../config/index.js';
 import { logger } from '../../logger.js';
 import { getOpenSeaCollection, getOpenSeaStats, openSeaAvailable } from './opensea.enhancer.js';
-import { getCoinGeckoNftStats, coinGeckoAvailable } from './coingecko.enhancer.js';
+import { getCoinGeckoNftStats, getCoinGeckoNftBySlug, coinGeckoAvailable } from './coingecko.enhancer.js';
 
 const CHAIN_HOSTS: Record<string, string> = {
   ethereum: 'eth-mainnet.g.alchemy.com',
@@ -117,19 +117,29 @@ export class AlchemyProvider implements NftDataProvider {
       ]);
     }
 
-    // Resolve slug → contract address
+    // Resolve slug → contract address.
+    // CoinGecko NFT ids match OpenSea slugs and include full market stats,
+    // so it doubles as resolver + stats source. Alchemy search is last resort.
     let contractAddress = input;
+    let cgInfo: Awaited<ReturnType<typeof getCoinGeckoNftBySlug>> = null;
     if (!isAddr) {
-      const resolved = osInfo?.contractAddress ?? (await resolveSlugToContract(input, chain, key));
+      if (!osInfo?.contractAddress) {
+        cgInfo = await getCoinGeckoNftBySlug(input);
+      }
+      const resolved =
+        osInfo?.contractAddress ??
+        cgInfo?.contractAddress ??
+        (await resolveSlugToContract(input, chain, key));
       if (!resolved) return null;
       contractAddress = resolved;
     }
 
-    // CoinGecko enhancer: fills stats by contract address when OpenSea isn't configured
+    // CoinGecko enhancer: fills stats by contract address when we don't
+    // already have them from the slug lookup or OpenSea
     const cgPromise =
-      !osStats && coinGeckoAvailable()
+      !osStats && !cgInfo && coinGeckoAvailable()
         ? getCoinGeckoNftStats(contractAddress, chain)
-        : Promise.resolve(null);
+        : Promise.resolve(cgInfo);
 
     const [meta, floor, owners, cgStats] = await Promise.all([
       alchemyFetch<any>(`${base}/getContractMetadata?contractAddress=${contractAddress}`),
@@ -150,7 +160,7 @@ export class AlchemyProvider implements NftDataProvider {
       null;
 
     return {
-      name:            osInfo?.name ?? meta?.name ?? meta?.openSeaMetadata?.collectionName ?? contractAddress,
+      name:            osInfo?.name ?? cgInfo?.name ?? meta?.name ?? meta?.openSeaMetadata?.collectionName ?? contractAddress,
       slug:            input,
       chain,
       contractAddress,
@@ -161,9 +171,9 @@ export class AlchemyProvider implements NftDataProvider {
       volumeChange24h: osStats?.volumeChange24h ?? null,
       listingsCount:   null,
       holdersCount:    osStats?.numOwners ?? cgStats?.numOwners ?? (Array.isArray(owners?.owners) ? owners.owners.length : null),
-      totalSupply:     osInfo?.totalSupply ?? (meta?.totalSupply ? Number(meta.totalSupply) : null),
-      imageUrl:        osInfo?.imageUrl ?? meta?.openSeaMetadata?.imageUrl ?? undefined,
-      description:     osInfo?.description ?? meta?.openSeaMetadata?.description ?? undefined,
+      totalSupply:     osInfo?.totalSupply ?? cgInfo?.totalSupply ?? (meta?.totalSupply ? Number(meta.totalSupply) : null),
+      imageUrl:        osInfo?.imageUrl ?? cgInfo?.imageUrl ?? meta?.openSeaMetadata?.imageUrl ?? undefined,
+      description:     osInfo?.description ?? cgInfo?.description ?? meta?.openSeaMetadata?.description ?? undefined,
       updatedAt:       new Date(),
     };
   }
