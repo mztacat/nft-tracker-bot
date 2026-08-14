@@ -221,6 +221,53 @@ export function formatWalletActivityAlert(params: {
   ].join('\n');
 }
 
+export function formatWalletCollectionHistory(params: {
+  wallet: string;
+  walletLabel: string | null;
+  collectionName: string;
+  txs: { txHash: string; tokenId: string | null; direction: 'buy' | 'sell' | 'transfer'; ethValue: number; timestamp: Date | null }[];
+  page: number;
+  pageSize: number;
+}): { text: string; hasMore: boolean } {
+  const { wallet, walletLabel, collectionName, txs, page, pageSize } = params;
+
+  const buys = txs.filter((t) => t.direction === 'buy');
+  const sells = txs.filter((t) => t.direction === 'sell');
+  const heldCount = buys.length - sells.length;
+  const totalSpent = buys.reduce((s, t) => s + t.ethValue, 0);
+  const pricedBuys = buys.filter((t) => t.ethValue > 0);
+  const avgBuy = pricedBuys.length ? totalSpent / pricedBuys.length : null;
+
+  const start = page * pageSize;
+  const slice = txs.slice(start, start + pageSize);
+  const hasMore = start + pageSize < txs.length;
+
+  const rows = slice.map((t) => {
+    const icon = t.direction === 'buy' ? '🟢' : '🔴';
+    const label = t.direction === 'buy' ? 'Buy' : 'Sell';
+    const tokenPart = t.tokenId ? ` #${t.tokenId}` : '';
+    const price = t.ethValue > 0 ? ` · <b>${t.ethValue.toFixed(4)} ETH</b>` : '';
+    const date = t.timestamp
+      ? ` · ${t.timestamp.toISOString().replace('T', ' ').slice(0, 16)} UTC`
+      : '';
+    const link = `<a href="https://etherscan.io/tx/${t.txHash}">tx</a>`;
+    return `${icon} ${label}${tokenPart}${price}${date} ${link}`;
+  });
+
+  const header = [
+    `📜 <b>${escHtml(collectionName)}</b> — Wallet History`,
+    ``,
+    `Wallet  <code>${shortAddr(wallet)}</code>${walletLabel ? ` (${escHtml(walletLabel)})` : ''}`,
+    `Buys  <b>${buys.length}</b>  ·  Sells  <b>${sells.length}</b>  ·  Est. held  <b>${Math.max(0, heldCount)}</b>`,
+    avgBuy != null ? `Avg buy  <b>${avgBuy.toFixed(4)} ETH</b>  ·  Total spent  <b>${totalSpent.toFixed(4)} ETH</b>` : '',
+    ``,
+    `<i>Showing ${start + 1}–${Math.min(start + pageSize, txs.length)} of ${txs.length} transactions (newest first)</i>`,
+    ``,
+  ].filter(Boolean).join('\n');
+
+  return { text: header + rows.join('\n'), hasMore };
+}
+
 export function formatDeployerAlert(params: {
   deployer: string;
   label?: string | null;

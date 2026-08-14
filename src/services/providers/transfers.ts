@@ -207,3 +207,93 @@ export async function getWalletNftTransfers(
     return true;
   });
 }
+
+export interface WalletCollectionTx {
+  txHash: string;
+  tokenId: string | null;
+  direction: 'buy' | 'sell' | 'transfer';
+  ethValue: number; // 0 when unknown / mint / transfer
+  timestamp: Date | null;
+}
+
+/**
+ * Full transfer history for a wallet in one specific collection (contract).
+ * Returns up to `maxEntries` transactions, newest-first.
+ */
+export async function getWalletCollectionHistory(
+  wallet: string,
+  contractAddress: string,
+  chain = 'ethereum',
+  maxEntries = 200
+): Promise<WalletCollectionTx[]> {
+  const maxHex = '0x' + Math.min(maxEntries, 1000).toString(16);
+  const common = {
+    fromBlock: '0x0',
+    toBlock: 'latest',
+    contractAddresses: [contractAddress],
+    category: ['erc721', 'erc1155'],
+    withMetadata: true,
+    excludeZeroValue: false,
+    order: 'desc',
+    maxCount: maxHex,
+  };
+
+  const [incoming, outgoing] = await Promise.all([
+    rpcCall<any>(chain, 'alchemy_getAssetTransfers', [{ ...common, toAddress: wallet }]),
+    rpcCall<any>(chain, 'alchemy_getAssetTransfers', [{ ...common, fromAddress: wallet }]),
+  ]);
+
+  const walletLower = wallet.toLowerCase();
+  const contractLower = contractAddress.toLowerCase();
+
+  const raw: Array<{ t: any; direction: 'buy' | 'sell' | 'transfer' }> = [
+    ...(incoming?.transfers ?? []).map((t: any) => ({
+      t,
+      direction: (t.from?.toLowerCase() === '0x0000000000000000000000000000000000000000'
+        ? 'buy' // mint — treat as buy
+        : 'buy') as 'buy',
+    })),
+    ...(outgoing?.transfers ?? []).map((t: any) => ({
+      t,
+      direction: (t.to?.toLowerCase() === '0x0000000000000000000000000000000000000000'
+        ? 'sell'
+        : 'sell') as 'sell',
+    })),
+  ];
+
+  // Deduplicate by txHash + tokenId + direction
+  const seen = new Set<string>();
+  const deduped = raw.filter(({ t, direction }) => {
+    const erc1155Entries: any[] = t.erc1155Metadata ?? [];
+    const tokenKey = t.tokenId ?? erc1155Entries[0]?.tokenId ?? '';
+    const k = `${t.hash}:${tokenKey}:${direction}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  // Sort newest first
+  deduped.sort((a, b) => {
+    const ta = a.t.metadata?.blockTimestamp ? new Date(a.t.metadata.blockTimestamp).getTime() : 0;
+    const tb = b.t.metadata?.blockTimestamp ? new Date(b.t.metadata.blockTimestamp).getTime() : 0;
+    return tb - ta;
+  });
+
+  const sliced = deduped.slice(0, maxEntries);
+
+  // Fetch ETH values for all unique tx hashes (buys typically have value)
+  const uniqueHashes = [...new Set(sliced.map(({ t }) => t.hash as string))];
+  const ethValues = await getTxEthValues(uniqueHashes.slice(0, 20), chain);
+
+  return sliced.map(({ t, direction }) => {
+    const erc1155Entries: any[] = t.erc1155Metadata ?? [];
+    const tokenId: string | null = t.tokenId ?? erc1155Entries[0]?.tokenId ?? null;
+    return {
+      txHash: t.hash,
+      tokenId: tokenId ? BigInt(tokenId).toString() : null,
+      direction,
+      ethValue: ethValues.get(t.hash) ?? 0,
+      timestamp: t.metadata?.blockTimestamp ? new Date(t.metadata.blockTimestamp) : null,
+    };
+  });
+}
