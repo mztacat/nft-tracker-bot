@@ -110,12 +110,10 @@ export function detectWhaleBuys(
 
     const isSweep = itemCount >= thresholds.minItems;
     const isWhaleSpend = ethSpent >= thresholds.minEth;
-    if (!isSweep && !isWhaleSpend) continue;
 
-    // Airdrop / transfer guard
-    if (isSweep && !isWhaleSpend && ethSpent === 0 && itemCount < thresholds.minItems * 2) {
-      continue;
-    }
+    // ETH spend is always required — item count alone (cheap collections) must
+    // not fire. isSweep only changes the alert label (Sweep vs Whale Buy).
+    if (!isWhaleSpend) continue;
 
     detections.push({ buyer, transfers: buyerTransfers, itemCount, txHashes, ethSpent, isSweep });
   }
