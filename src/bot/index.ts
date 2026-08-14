@@ -18,6 +18,8 @@ import { registerTraitsCommand } from './commands/traits.command.js';
 import { registerDeployerCommand } from './commands/deployer.command.js';
 import { registerHistoryCommand } from './commands/history.command.js';
 import { registerThresholdCommand } from './commands/threshold.command.js';
+import { registerSnoozeCommand } from './commands/snooze.command.js';
+import { registerPnlCommand } from './commands/pnl.command.js';
 import { registerCallbackHandlers } from './handlers/callback.handler.js';
 import { logger } from '../logger.js';
 
@@ -50,6 +52,8 @@ export function createBot(): Bot {
   registerDeployerCommand(bot);
   registerHistoryCommand(bot);
   registerThresholdCommand(bot);
+  registerSnoozeCommand(bot);
+  registerPnlCommand(bot);
   registerAccessCommands(bot);
   registerCallbackHandlers(bot);
 
@@ -82,7 +86,9 @@ export async function registerBotCommands(bot: Bot): Promise<void> {
     { command: 'wallets', description: 'Manage tracked wallets' },
     { command: 'portfolio', description: 'Wallet holdings & estimated value' },
     { command: 'history', description: 'Wallet buy/sell history in a collection' },
+    { command: 'pnl', description: 'Realized & unrealized P&L for a wallet in a collection' },
     { command: 'setthreshold', description: 'Set min % for floor alerts / min ETH for whale alerts' },
+    { command: 'snooze', description: 'Snooze alerts for a collection (1h / 6h / 1d / mute)' },
     { command: 'trackdeployer', description: 'Alert when a team deploys a new contract' },
     { command: 'traitalert', description: 'Alert when a trait (e.g. tier) is listed' },
     { command: 'notifications', description: 'Manage notifications' },

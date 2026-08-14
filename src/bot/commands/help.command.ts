@@ -24,6 +24,7 @@ const HELP_TEXT = `
 /wallets — List tracked wallets + untrack buttons
 /portfolio <code>0x…</code> — Holdings, floors &amp; estimated total value
 /history <code>&lt;wallet&gt; &lt;collection&gt;</code> — Full buy/sell log with prices paid
+/pnl <code>&lt;wallet&gt; &lt;collection&gt;</code> — Realized + unrealized P&amp;L with FIFO cost basis
 
 <b>Alpha Tools</b>
 /traitalert <code>&lt;collection&gt; Trait=Value</code> — Alert when that tier hits market (💎 snipe-flagged)
@@ -32,6 +33,7 @@ const HELP_TEXT = `
 /setthreshold <code>&lt;collection&gt; &lt;pct&gt;</code> — Min % floor move to alert (default 5%)
 /setthreshold <code>&lt;collection&gt; whale &lt;ETH&gt;</code> — Min ETH spend to trigger whale alert (default 5)
 /setthreshold <code>&lt;collection&gt;</code> — View current thresholds
+/snooze <code>&lt;collection&gt; 1h|6h|1d|off</code> — Silence alerts temporarily (or tap 🔕 on any alert)
 
 <b>Alerts you can get</b>
 📉 Floor moves · 🐋 Whale buys &amp; sweeps · 🚪 Holder exits

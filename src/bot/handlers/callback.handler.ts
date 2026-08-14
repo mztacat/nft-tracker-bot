@@ -1,5 +1,6 @@
 import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
+// snooze utility imported dynamically in the callback to avoid circular deps
 import { config } from '../../config/index.js';
 import { requireAdmin } from '../middlewares/auth.middleware.js';
 import { trackCollection, untrackCollection, getCollectionSummary } from '../../services/nft/collection.service.js';
@@ -426,5 +427,25 @@ export function registerCallbackHandlers(bot: Bot): void {
         },
       }
     );
+  });
+
+  // Snooze buttons attached to every alert: snooze:<duration>:<itemId>
+  bot.callbackQuery(/^snooze:(1h|6h|1d|off):(\d+)$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const [, duration, itemIdStr] = ctx.match!;
+    const itemId = parseInt(itemIdStr!, 10);
+
+    const { snoozeItem, SNOOZE_DURATIONS } = await import('../../utils/snooze.js');
+
+    const item = await prisma.trackedItem.findUnique({ where: { id: itemId } });
+    const name = item?.label ?? item?.collectionSlug ?? `#${itemId}`;
+
+    await snoozeItem(itemId, duration!);
+    const dur = SNOOZE_DURATIONS[duration!]!;
+    const reply = dur.ms === null
+      ? `🔕 <b>${name}</b> muted indefinitely.\n\nResume with /snooze ${item?.collectionSlug ?? ''} on`
+      : `🔕 <b>${name}</b> snoozed for <b>${dur.label}</b>.\n\nAlerts will resume automatically.`;
+
+    await ctx.reply(reply, { parse_mode: 'HTML' }).catch(() => {});
   });
 }

@@ -2,6 +2,7 @@ import { prisma } from '../../db/client.js';
 import { logger } from '../../logger.js';
 import { Bot } from 'grammy';
 import { formatAlertFloorChange, formatAlertSale, formatOwnerChangeAlert, formatDigest, formatWhaleBuyAlert } from '../formatter/index.js';
+import { isItemSnoozed, buildSnoozeKeyboard } from '../../utils/snooze.js';
 
 const DAILY_ALERT_CAP = 100;
 
@@ -25,6 +26,8 @@ async function canSendAlert(
   });
 
   if (!setting || !setting.enabled) return false;
+
+  if (await isItemSnoozed(trackedItemId)) return false;
 
   if (setting.lastSentAt) {
     const cooldownMs = (setting.cooldownMinutes ?? cooldownMinutes) * 60_000;
@@ -81,7 +84,7 @@ export async function processFloorChangeAlert(params: {
 
   if (_bot) {
     try {
-      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML', reply_markup: buildSnoozeKeyboard(trackedItemId) });
       const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
       if (dbChat) await markAlertSent(trackedItemId, dbChat.id, 'FLOOR_CHANGE', message);
     } catch (err) {
@@ -111,7 +114,7 @@ export async function processSaleAlert(params: {
   const message = formatAlertSale(collectionName, tokenId, price);
   if (_bot) {
     try {
-      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML', reply_markup: buildSnoozeKeyboard(trackedItemId) });
       const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
       if (dbChat) await markAlertSent(trackedItemId, dbChat.id, 'SALE', message);
     } catch (err) {
@@ -139,7 +142,7 @@ export async function processOwnerChangeAlert(params: {
   const message = formatOwnerChangeAlert(collectionName, tokenId, newOwner, oldOwner);
   if (_bot) {
     try {
-      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML', reply_markup: buildSnoozeKeyboard(trackedItemId) });
       const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
       if (dbChat) await markAlertSent(trackedItemId, dbChat.id, 'OWNER_CHANGE', message);
     } catch (err) {
@@ -186,9 +189,12 @@ export async function processWhaleBuyAlert(params: {
   });
   if (claimed.count === 0) return false;
 
+  // Snooze check (whale path uses atomic cooldown claim, so check separately)
+  if (await isItemSnoozed(trackedItemId)) return false;
+
   const message = formatWhaleBuyAlert(params);
   try {
-    await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+    await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML', reply_markup: buildSnoozeKeyboard(trackedItemId) });
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
     if (dbChat) {
       await prisma.alertHistory.create({
@@ -228,7 +234,7 @@ export async function processGenericAlert(params: {
 
   if (!_bot) return false;
   try {
-    await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+    await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML', reply_markup: buildSnoozeKeyboard(trackedItemId) });
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
     if (dbChat) await markAlertSent(trackedItemId, dbChat.id, eventType, message);
     return true;
@@ -263,7 +269,7 @@ export async function sendDigestAlert(params: {
   const message = formatDigest(collectionName, stats);
   if (_bot) {
     try {
-      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML' });
+      await _bot.api.sendMessage(telegramChatId, message, { parse_mode: 'HTML', reply_markup: buildSnoozeKeyboard(trackedItemId) });
       const dbChat = await prisma.chat.findUnique({ where: { telegramChatId } });
       if (dbChat) await markAlertSent(trackedItemId, dbChat.id, 'DIGEST', message);
     } catch (err) {
