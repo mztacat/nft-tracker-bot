@@ -28,6 +28,8 @@ const HELP_TEXT = `
 <b>Alpha Tools</b>
 /traitalert <code>&lt;collection&gt; Trait=Value</code> — Tier listings, 💎 snipe-flagged
 /trackdeployer <code>&lt;contract or slug&gt;</code> — Alert when the team deploys something new
+/setthreshold <code>&lt;collection&gt; &lt;pct&gt;</code> — Min % move for floor alerts (default 5%)
+/setthreshold <code>&lt;collection&gt; whale &lt;ETH&gt;</code> — Min ETH spend for whale alerts (default 5)
 
 <b>Alerts you can get</b>
 📉 Floor moves · 🐋 Whale buys &amp; sweeps · 🚪 Holder exits

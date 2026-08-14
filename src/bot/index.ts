@@ -17,6 +17,7 @@ import { registerWalletCommand } from './commands/wallet.command.js';
 import { registerTraitsCommand } from './commands/traits.command.js';
 import { registerDeployerCommand } from './commands/deployer.command.js';
 import { registerHistoryCommand } from './commands/history.command.js';
+import { registerThresholdCommand } from './commands/threshold.command.js';
 import { registerCallbackHandlers } from './handlers/callback.handler.js';
 import { logger } from '../logger.js';
 
@@ -48,6 +49,7 @@ export function createBot(): Bot {
   registerTraitsCommand(bot);
   registerDeployerCommand(bot);
   registerHistoryCommand(bot);
+  registerThresholdCommand(bot);
   registerAccessCommands(bot);
   registerCallbackHandlers(bot);
 
@@ -80,6 +82,7 @@ export async function registerBotCommands(bot: Bot): Promise<void> {
     { command: 'wallets', description: 'Manage tracked wallets' },
     { command: 'portfolio', description: 'Wallet holdings & estimated value' },
     { command: 'history', description: 'Wallet buy/sell history in a collection' },
+    { command: 'setthreshold', description: 'Set min % for floor alerts / min ETH for whale alerts' },
     { command: 'trackdeployer', description: 'Alert when a team deploys a new contract' },
     { command: 'traitalert', description: 'Alert when a trait (e.g. tier) is listed' },
     { command: 'notifications', description: 'Manage notifications' },
