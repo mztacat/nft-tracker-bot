@@ -74,6 +74,7 @@ export async function registerBotCommands(bot: Bot): Promise<void> {
     { command: 'holders', description: 'View holder info' },
     { command: 'trackwallet', description: 'Track a wallet\'s NFT activity' },
     { command: 'wallets', description: 'Manage tracked wallets' },
+    { command: 'portfolio', description: 'Wallet holdings & estimated value' },
     { command: 'traitalert', description: 'Alert when a trait (e.g. tier) is listed' },
     { command: 'notifications', description: 'Manage notifications' },
     { command: 'access', description: 'Admin access panel' },

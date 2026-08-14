@@ -221,6 +221,36 @@ export function formatWalletActivityAlert(params: {
   ].join('\n');
 }
 
+export function formatPortfolio(params: {
+  wallet: string;
+  label?: string | null;
+  totalNfts: number;
+  totalCollections: number;
+  totalEstValueEth: number;
+  pricedCollections: number;
+  holdings: { name: string; count: number; floorEth: number | null; estValueEth: number | null }[];
+}): string {
+  const { wallet, label, totalNfts, totalCollections, totalEstValueEth, pricedCollections, holdings } = params;
+  const top = holdings.slice(0, 10);
+  const rows = top.map((h) => {
+    const value =
+      h.estValueEth != null ? `${h.estValueEth.toFixed(2)} ETH` : '—';
+    const floor = h.floorEth != null ? ` @ ${h.floorEth.toFixed(3)}` : '';
+    return `• <b>${escHtml(h.name)}</b>  ×${h.count}${floor}  →  ${value}`;
+  });
+  return [
+    `💼 <b>Wallet Portfolio</b>`,
+    ``,
+    `Wallet  <code>${shortAddr(wallet)}</code>${label ? ` (${escHtml(label)})` : ''}`,
+    `NFTs  <b>${totalNfts}</b> across <b>${totalCollections}</b> collections`,
+    `Est. value  <b>${totalEstValueEth.toFixed(2)} ETH</b> <i>(floor × count, ${pricedCollections} priced collections)</i>`,
+    ``,
+    `<b>Top holdings</b>`,
+    ...rows,
+    ...(holdings.length > 10 ? [`…and ${holdings.length - 10} more collections`] : []),
+  ].join('\n');
+}
+
 export function formatTraitListingAlert(params: {
   collectionName: string;
   traitType: string;
@@ -228,19 +258,35 @@ export function formatTraitListingAlert(params: {
   tokenId: string;
   tokenName?: string | null;
   price: number | null;
+  floor?: number | null;
+  medianPrice?: number | null;
+  isSnipe?: boolean;
   url: string;
 }): string {
-  const { collectionName, traitType, traitValue, tokenId, tokenName, price, url } = params;
-  return [
-    `🏷 <b>${escHtml(traitValue)} Listed!</b>`,
+  const { collectionName, traitType, traitValue, tokenId, tokenName, price, floor, medianPrice, isSnipe, url } = params;
+  const lines = [
+    isSnipe
+      ? `💎 <b>${escHtml(traitValue)} SNIPE — priced below usual!</b>`
+      : `🏷 <b>${escHtml(traitValue)} Listed!</b>`,
     ``,
     `Collection  <b>${escHtml(collectionName)}</b>`,
     `Item  ${tokenName ? escHtml(tokenName) : `#${tokenId}`}`,
     `Trait  ${escHtml(traitType)} = <b>${escHtml(traitValue)}</b>`,
-    ...(price != null ? [`Price  <b>${price.toFixed(4)} ETH</b>`] : []),
-    ``,
-    `<a href="${url}">View on OpenSea</a>`,
-  ].join('\n');
+  ];
+  if (price != null) {
+    lines.push(`Price  <b>${price.toFixed(4)} ETH</b>`);
+    if (floor != null && floor > 0) {
+      lines.push(`vs Floor  ${(price / floor).toFixed(2)}x (floor ${floor.toFixed(4)} ETH)`);
+    }
+    if (medianPrice != null) {
+      const diffPct = ((price - medianPrice) / medianPrice) * 100;
+      lines.push(
+        `vs Usual ${escHtml(traitValue)}  ${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}% (median ${medianPrice.toFixed(4)} ETH)`
+      );
+    }
+  }
+  lines.push(``, `<a href="${url}">View on OpenSea</a>`);
+  return lines.join('\n');
 }
 
 export function formatSnipeAlert(params: {

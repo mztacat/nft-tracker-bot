@@ -1,6 +1,8 @@
 import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
 import { requireApproved } from '../middlewares/auth.middleware.js';
+import { getWalletPortfolio } from '../../services/providers/portfolio.js';
+import { formatPortfolio } from '../../services/formatter/index.js';
 
 const ETH_ADDR = /^0x[0-9a-fA-F]{40}$/;
 
@@ -116,6 +118,63 @@ export function registerWalletCommand(bot: Bot): void {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: keyboard },
     });
+  });
+
+  // /portfolio <address | tracked wallet>
+  bot.command('portfolio', requireApproved, async (ctx) => {
+    let address = (ctx.match as string).trim().split(/\s+/)[0] ?? '';
+
+    // No arg: if exactly one tracked wallet in this chat, use it
+    if (!address) {
+      const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat!.id) } });
+      const wallets = dbChat
+        ? await prisma.trackedItem.findMany({
+            where: { chatId: dbChat.id, type: 'WALLET', isActive: true },
+          })
+        : [];
+      if (wallets.length === 1) {
+        address = wallets[0].walletAddress!;
+      } else {
+        await ctx.reply(
+          '💼 <b>Wallet Portfolio</b>\n\nUsage: <code>/portfolio 0x…</code>\n\nShows holdings, floors, and estimated value.',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+    }
+
+    if (!ETH_ADDR.test(address)) {
+      await ctx.reply('❌ That does not look like an Ethereum address. Usage: <code>/portfolio 0x…</code>', {
+        parse_mode: 'HTML',
+      });
+      return;
+    }
+
+    const waitMsg = await ctx.reply('⏳ Scanning wallet holdings...');
+    const portfolio = await getWalletPortfolio(address.toLowerCase());
+    if (!portfolio || portfolio.totalNfts === 0) {
+      await ctx.api.editMessageText(
+        ctx.chat!.id,
+        waitMsg.message_id,
+        portfolio ? 'This wallet holds no NFTs on Ethereum.' : '⚠️ Could not fetch portfolio right now. Try again later.'
+      );
+      return;
+    }
+
+    // Label if this wallet is tracked here
+    const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat!.id) } });
+    const tracked = dbChat
+      ? await prisma.trackedItem.findFirst({
+          where: { chatId: dbChat.id, type: 'WALLET', walletAddress: address.toLowerCase() },
+        })
+      : null;
+
+    await ctx.api.editMessageText(
+      ctx.chat!.id,
+      waitMsg.message_id,
+      formatPortfolio({ wallet: address, label: tracked?.label, ...portfolio }),
+      { parse_mode: 'HTML' }
+    );
   });
 
   // Untrack callback

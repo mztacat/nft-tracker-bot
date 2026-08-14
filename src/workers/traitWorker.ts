@@ -78,6 +78,16 @@ export async function runTraitWorker(): Promise<void> {
       const data = await osFetch(`/events/collection/${encodeURIComponent(slug)}?event_type=listing&after=${after}&limit=50`);
       const events: any[] = data?.asset_events ?? [];
 
+      // Latest known collection floor for price comparison
+      const snap = await prisma.collectionSnapshot.findFirst({
+        where: { trackedItemId: item.id, floorPrice: { not: null } },
+        orderBy: { timestamp: 'desc' },
+      });
+      const floor = snap?.floorPrice ?? null;
+
+      // Rolling price history of this trait's listings (kept in thresholdJson)
+      const priceHistory: number[] = Array.isArray((filter as any).prices) ? (filter as any).prices : [];
+
       for (const ev of events) {
         const orderId: string = ev.order_hash ?? `${ev.event_timestamp}:${ev.nft?.identifier}`;
         if (seenOrders.has(orderId)) continue;
@@ -101,6 +111,20 @@ export async function runTraitWorker(): Promise<void> {
           if (!isFinite(price)) price = null;
         }
 
+        // Rarity-aware pricing: compare against the median of recent
+        // listings of the same trait
+        let medianPrice: number | null = null;
+        let isSnipe = false;
+        if (price != null) {
+          if (priceHistory.length >= 3) {
+            const sorted = [...priceHistory].sort((a, b) => a - b);
+            medianPrice = sorted[Math.floor(sorted.length / 2)];
+            isSnipe = price < medianPrice * 0.85;
+          }
+          priceHistory.push(price);
+          if (priceHistory.length > 20) priceHistory.shift();
+        }
+
         const message = formatTraitListingAlert({
           collectionName: item.label ?? slug,
           traitType: filter.traitType,
@@ -108,6 +132,9 @@ export async function runTraitWorker(): Promise<void> {
           tokenId,
           tokenName: ev.nft?.name ?? null,
           price,
+          floor,
+          medianPrice,
+          isSnipe,
           url: `https://opensea.io/assets/${chain}/${contract}/${tokenId}`,
         });
         const sent = await processGenericAlert({
@@ -118,6 +145,14 @@ export async function runTraitWorker(): Promise<void> {
           defaultCooldownMinutes: 0,
         });
         if (sent !== false) seenOrders.add(orderId);
+      }
+
+      // Persist updated trait price history
+      if (setting) {
+        await prisma.notificationSetting.update({
+          where: { id: setting.id },
+          data: { thresholdJson: { traitType: filter.traitType, traitValue: filter.traitValue, prices: priceHistory } },
+        }).catch(() => {});
       }
 
       if (seenOrders.size > 10000) seenOrders.clear();
