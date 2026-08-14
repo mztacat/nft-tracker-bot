@@ -3,6 +3,7 @@ import { prisma } from '../../db/client.js';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 import { getWalletPortfolio } from '../../services/providers/portfolio.js';
 import { formatPortfolio } from '../../services/formatter/index.js';
+import { parseOpenSeaInput } from '../../utils/opensea-url.js';
 
 const ETH_ADDR = /^0x[0-9a-fA-F]{40}$/;
 

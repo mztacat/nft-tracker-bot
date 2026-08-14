@@ -4,6 +4,7 @@ import { requireApproved } from '../middlewares/auth.middleware.js';
 import { getWalletCollectionHistory } from '../../services/providers/transfers.js';
 import { getOpenSeaCollection } from '../../services/providers/opensea.enhancer.js';
 import { formatWalletCollectionHistory } from '../../services/formatter/index.js';
+import { parseOpenSeaInput } from '../../utils/opensea-url.js';
 
 const ETH_ADDR = /^0x[0-9a-fA-F]{40}$/;
 const PAGE_SIZE = 10;
@@ -40,9 +41,12 @@ async function resolveContract(
   arg: string,
   chatId: number
 ): Promise<{ contractAddress: string; collectionName: string } | null> {
-  if (ETH_ADDR.test(arg)) return { contractAddress: arg.toLowerCase(), collectionName: arg };
+  const parsed = parseOpenSeaInput(arg);
+  if (!parsed) return null;
 
-  const slug = arg.toLowerCase();
+  if (parsed.kind === 'address') return { contractAddress: parsed.value, collectionName: parsed.value };
+
+  const slug = parsed.value;
 
   // Check tracked items first
   const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(chatId) } });

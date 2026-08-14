@@ -1,5 +1,6 @@
 import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
+import { parseOpenSeaInput } from '../../utils/opensea-url.js';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 
 const USAGE =
@@ -22,7 +23,10 @@ export function registerTraitsCommand(bot: Bot): void {
     }
 
     const parts = args.split(/\s+/);
-    const slug = parts[0]?.toLowerCase().replace(/[.,;:!?]+$/, '');
+    const rawSlugArg = parts[0] ?? '';
+    const parsed = parseOpenSeaInput(rawSlugArg);
+    // For trait alerts we always need a slug (address alone isn't enough to look up tracked item)
+    const slug = parsed?.kind === 'slug' ? parsed.value : parsed?.kind === 'address' ? parsed.value : rawSlugArg.toLowerCase().replace(/[.,;:!?]+$/, '');
     const rest = parts.slice(1).join(' ');
     if (!slug || !rest) {
       await ctx.reply(USAGE, { parse_mode: 'HTML' });

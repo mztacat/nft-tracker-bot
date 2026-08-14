@@ -2,6 +2,7 @@ import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 import { getContractDeployer } from '../../services/providers/deployer.js';
+import { parseOpenSeaInput } from '../../utils/opensea-url.js';
 
 const ETH_ADDR = /^0x[0-9a-fA-F]{40}$/;
 
@@ -31,13 +32,19 @@ export function registerDeployerCommand(bot: Bot): void {
       return;
     }
 
-    // Resolve to a contract address
+    // Resolve to a contract address — accept full OpenSea URLs too
+    const parsed = parseOpenSeaInput(arg);
+    if (!parsed) {
+      await ctx.reply(USAGE, { parse_mode: 'HTML' });
+      return;
+    }
+
     let contract: string | null = null;
     let sourceName: string | null = null;
-    if (ETH_ADDR.test(arg)) {
-      contract = arg.toLowerCase();
+    if (parsed.kind === 'address') {
+      contract = parsed.value;
     } else {
-      const slug = arg.toLowerCase().replace(/[.,;:!?]+$/, '');
+      const slug = parsed.value;
       const item = await prisma.trackedItem.findFirst({
         where: { chatId: dbChat.id, type: 'COLLECTION', collectionSlug: slug, isActive: true },
       });
@@ -48,7 +55,7 @@ export function registerDeployerCommand(bot: Bot): void {
     }
     if (!contract) {
       await ctx.reply(
-        '❌ Give me a contract address (0x…) or the slug of a collection you already track.',
+        '❌ Give me a contract address (0x…), an OpenSea URL, or the slug of a collection you already track.',
         { parse_mode: 'HTML' }
       );
       return;
