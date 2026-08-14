@@ -15,6 +15,7 @@ import {
 } from './commands/index.js';
 import { registerWalletCommand } from './commands/wallet.command.js';
 import { registerTraitsCommand } from './commands/traits.command.js';
+import { registerDeployerCommand } from './commands/deployer.command.js';
 import { registerCallbackHandlers } from './handlers/callback.handler.js';
 import { logger } from '../logger.js';
 
@@ -44,6 +45,7 @@ export function createBot(): Bot {
   registerNotificationsCommand(bot);
   registerWalletCommand(bot);
   registerTraitsCommand(bot);
+  registerDeployerCommand(bot);
   registerAccessCommands(bot);
   registerCallbackHandlers(bot);
 
@@ -75,6 +77,7 @@ export async function registerBotCommands(bot: Bot): Promise<void> {
     { command: 'trackwallet', description: 'Track a wallet\'s NFT activity' },
     { command: 'wallets', description: 'Manage tracked wallets' },
     { command: 'portfolio', description: 'Wallet holdings & estimated value' },
+    { command: 'trackdeployer', description: 'Alert when a team deploys a new contract' },
     { command: 'traitalert', description: 'Alert when a trait (e.g. tier) is listed' },
     { command: 'notifications', description: 'Manage notifications' },
     { command: 'access', description: 'Admin access panel' },

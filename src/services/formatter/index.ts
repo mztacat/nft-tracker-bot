@@ -221,6 +221,27 @@ export function formatWalletActivityAlert(params: {
   ].join('\n');
 }
 
+export function formatDeployerAlert(params: {
+  deployer: string;
+  label?: string | null;
+  contractAddress: string;
+  kind: string;
+  name: string | null;
+  symbol: string | null;
+  txHash: string;
+}): string {
+  const { deployer, label, contractAddress, kind, name, symbol, txHash } = params;
+  return [
+    `🚀 <b>Deployer Alert — New ${escHtml(kind)} Deployed!</b>`,
+    ``,
+    `Deployer  <code>${shortAddr(deployer)}</code>${label ? ` (${escHtml(label)})` : ''}`,
+    ...(name ? [`Name  <b>${escHtml(name)}</b>${symbol ? ` (${escHtml(symbol)})` : ''}`] : []),
+    `Contract  <code>${contractAddress}</code>`,
+    ``,
+    `<a href="https://etherscan.io/address/${contractAddress}">Contract</a>  ·  <a href="https://etherscan.io/tx/${txHash}">Deploy Tx</a>`,
+  ].join('\n');
+}
+
 export function formatPortfolio(params: {
   wallet: string;
   label?: string | null;
