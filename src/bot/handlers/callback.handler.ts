@@ -9,7 +9,7 @@ import {
   formatERC721Owner,
   formatCollectionHolders,
 } from '../../services/formatter/index.js';
-import { buildMainMenuKeyboard } from '../commands/menu.command.js';
+import { buildMainMenuKeyboard, buildMenuText } from '../commands/menu.command.js';
 import { buildNotifSettingsKeyboard } from '../commands/notifications.command.js';
 import { logger } from '../../logger.js';
 
@@ -24,10 +24,52 @@ export function registerCallbackHandlers(bot: Bot): void {
     const from = ctx.from!;
     const user = await prisma.user.findUnique({ where: { telegramId: String(from.id) } });
     const isAdmin = String(from.id) === config.OWNER_ID || (user?.isAdmin ?? false);
-    await ctx.editMessageText('<b>Main Menu</b>\n\nChoose an option:', {
+    await ctx.editMessageText(await buildMenuText(String(ctx.chat!.id)), {
       parse_mode: 'HTML',
       reply_markup: buildMainMenuKeyboard(isAdmin),
     });
+  });
+
+  bot.callbackQuery('menu_wallets', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply(
+      '👛 <b>Wallet Tracking</b>\n\n' +
+        '• <code>/trackwallet 0x… [label]</code> — follow a wallet\'s buys, mints & sells\n' +
+        '• <code>/wallets</code> — list & untrack\n\n' +
+        '<i>Tip: grab whale addresses from 👥 View Holders on any collection card.</i>',
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  bot.callbackQuery('menu_portfolio', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply(
+      '💼 <b>Portfolio</b>\n\n' +
+        '<code>/portfolio 0x…</code> — holdings, floors & estimated value of any wallet.\n\n' +
+        '<i>Tracking exactly one wallet? Plain</i> <code>/portfolio</code> <i>works too.</i>',
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  bot.callbackQuery('menu_traits', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply(
+      '🏷 <b>Trait Alerts</b>\n\n' +
+        '<code>/traitalert &lt;collection&gt; Tier=Legendary</code> — ping when that tier hits the market.\n\n' +
+        'Alerts show price vs floor and vs the usual rate for the trait — underpriced listings get flagged 💎 <b>SNIPE</b>.\n\n' +
+        '<i>Turn off with</i> <code>/traitalert &lt;collection&gt; off</code>',
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  bot.callbackQuery('menu_deployer', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply(
+      '🚀 <b>Deployer Watch</b>\n\n' +
+        '<code>/trackdeployer &lt;contract or slug&gt;</code> — watch the team behind a collection.\n\n' +
+        'The moment their wallet deploys a new NFT contract or token, you\'ll know — usually before any announcement.',
+      { parse_mode: 'HTML' }
+    );
   });
 
   bot.callbackQuery('menu_help', async (ctx) => {
