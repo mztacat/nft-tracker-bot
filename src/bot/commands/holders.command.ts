@@ -1,13 +1,14 @@
 import { Bot } from 'grammy';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 import { prisma } from '../../db/client.js';
+import { replyAutoDelete } from '../../utils/auto-delete.js';
 
 export function registerHoldersCommand(bot: Bot): void {
   bot.command('holders', requireApproved, async (ctx) => {
     const chatIdStr = String(ctx.chat!.id);
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: chatIdStr } });
     if (!dbChat) {
-      await ctx.reply('No tracked items yet. Use /link to add a collection or asset first.');
+      await replyAutoDelete(ctx, 'No tracked items yet. Use /link to add a collection or asset first.');
       return;
     }
 
@@ -17,7 +18,7 @@ export function registerHoldersCommand(bot: Bot): void {
     });
 
     if (items.length === 0) {
-      await ctx.reply('No tracked items yet. Use /link to add a collection or asset first.');
+      await replyAutoDelete(ctx, 'No tracked items yet. Use /link to add a collection or asset first.');
       return;
     }
 
@@ -31,7 +32,7 @@ export function registerHoldersCommand(bot: Bot): void {
       },
     ]);
 
-    await ctx.reply('👥 <b>View Holders</b>\n\nSelect a tracked item to view holder info:', {
+    await replyAutoDelete(ctx, '👥 <b>View Holders</b>\n\nSelect a tracked item to view holder info:', {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: keyboard },
     });

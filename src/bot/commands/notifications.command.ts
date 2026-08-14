@@ -1,6 +1,7 @@
 import { Bot } from 'grammy';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 import { prisma } from '../../db/client.js';
+import { replyAutoDelete } from '../../utils/auto-delete.js';
 
 const COLLECTION_EVENTS = [
   'SALE', 'LISTING', 'DELISTING', 'OFFER', 'FLOOR_CHANGE',
@@ -22,7 +23,7 @@ export function registerNotificationsCommand(bot: Bot): void {
     const chatIdStr = String(ctx.chat!.id);
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: chatIdStr } });
     if (!dbChat) {
-      await ctx.reply('No tracked items yet.');
+      await replyAutoDelete(ctx, 'No tracked items yet.');
       return;
     }
 
@@ -32,7 +33,7 @@ export function registerNotificationsCommand(bot: Bot): void {
     });
 
     if (items.length === 0) {
-      await ctx.reply('No tracked items. Use /link to add a collection or asset first.');
+      await replyAutoDelete(ctx, 'No tracked items. Use /link to add a collection or asset first.');
       return;
     }
 
@@ -43,7 +44,7 @@ export function registerNotificationsCommand(bot: Bot): void {
       },
     ]);
 
-    await ctx.reply('🔔 <b>Notification Settings</b>\n\nSelect a tracked item to manage its notifications:', {
+    await replyAutoDelete(ctx, '🔔 <b>Notification Settings</b>\n\nSelect a tracked item to manage its notifications:', {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: keyboard },
     });

@@ -1,13 +1,14 @@
 import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
 import { requireApproved } from '../middlewares/auth.middleware.js';
+import { replyAutoDelete } from '../../utils/auto-delete.js';
 
 export function registerTrackingCommand(bot: Bot): void {
   bot.command('tracking', requireApproved, async (ctx) => {
     const chatIdStr = String(ctx.chat!.id);
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: chatIdStr } });
     if (!dbChat) {
-      await ctx.reply('No tracked items yet.');
+      await replyAutoDelete(ctx, 'No tracked items yet.');
       return;
     }
 
@@ -17,7 +18,7 @@ export function registerTrackingCommand(bot: Bot): void {
     });
 
     if (items.length === 0) {
-      await ctx.reply(
+      await replyAutoDelete(ctx,
         '📋 <b>My Tracked Items</b>\n\nYou have no tracked items yet.\n\nUse /link to add an NFT or collection.',
         { parse_mode: 'HTML' }
       );
@@ -66,7 +67,7 @@ export function registerTrackingCommand(bot: Bot): void {
     ]);
     keyboard.push([{ text: '🔙 Back', callback_data: 'main_menu' }]);
 
-    await ctx.reply(text, {
+    await replyAutoDelete(ctx, text, {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: keyboard },
     });
