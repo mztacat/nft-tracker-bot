@@ -22,6 +22,7 @@ const HELP_TEXT = `
 /trackwallet <code>0x… [label]</code> — Follow a wallet's buys, mints &amp; sells
 /wallets — List &amp; untrack wallets
 /portfolio <code>0x…</code> — Holdings, floors &amp; estimated value
+/history <code>&lt;wallet&gt; &lt;collection&gt;</code> — Every buy &amp; sell with prices paid
 
 <b>Alpha Tools</b>
 /traitalert <code>&lt;collection&gt; Trait=Value</code> — Tier listings, 💎 snipe-flagged
