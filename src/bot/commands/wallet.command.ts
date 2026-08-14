@@ -4,6 +4,7 @@ import { requireApproved } from '../middlewares/auth.middleware.js';
 import { getWalletPortfolio } from '../../services/providers/portfolio.js';
 import { formatPortfolio } from '../../services/formatter/index.js';
 import { parseOpenSeaInput } from '../../utils/opensea-url.js';
+import { replyAutoDelete, scheduleDelete, isGroupChat } from '../../utils/auto-delete.js';
 
 const ETH_ADDR = /^0x[0-9a-fA-F]{40}$/;
 
@@ -19,7 +20,7 @@ export function registerWalletCommand(bot: Bot): void {
     const label = parts.slice(1).join(' ') || null;
 
     if (!address || !ETH_ADDR.test(address)) {
-      await ctx.reply(
+      await replyAutoDelete(ctx,
         '👛 <b>Track a Wallet</b>\n\nUsage: <code>/trackwallet 0x… [label]</code>\n\nYou will get alerts whenever this wallet buys, mints, or sells NFTs.',
         { parse_mode: 'HTML' }
       );
@@ -29,7 +30,7 @@ export function registerWalletCommand(bot: Bot): void {
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat!.id) } });
     const dbUser = await prisma.user.findUnique({ where: { telegramId: String(ctx.from!.id) } });
     if (!dbChat || !dbUser) {
-      await ctx.reply('⚠️ Please run /start first.');
+      await replyAutoDelete(ctx, '⚠️ Please run /start first.');
       return;
     }
 
@@ -38,7 +39,7 @@ export function registerWalletCommand(bot: Bot): void {
       where: { chatId: dbChat.id, type: 'WALLET', isActive: true },
     });
     if (count >= limit) {
-      await ctx.reply(`⚠️ Maximum wallet tracking limit (${limit}) reached. Remove one with /wallets first.`);
+      await replyAutoDelete(ctx, `⚠️ Maximum wallet tracking limit (${limit}) reached. Remove one with /wallets first.`);
       return;
     }
 
@@ -83,7 +84,7 @@ export function registerWalletCommand(bot: Bot): void {
       update: { enabled: true },
     });
 
-    await ctx.reply(
+    await replyAutoDelete(ctx,
       `✅ Tracking wallet <code>${shortAddr(wallet)}</code>${label ? ` (${label})` : ''}\n\nYou'll be alerted on NFT buys, mints, and sells.`,
       { parse_mode: 'HTML' }
     );
@@ -93,7 +94,7 @@ export function registerWalletCommand(bot: Bot): void {
   bot.command('wallets', requireApproved, async (ctx) => {
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat!.id) } });
     if (!dbChat) {
-      await ctx.reply('No tracked wallets yet. Use /trackwallet to add one.');
+      await replyAutoDelete(ctx, 'No tracked wallets yet. Use /trackwallet to add one.');
       return;
     }
 
@@ -103,7 +104,7 @@ export function registerWalletCommand(bot: Bot): void {
     });
 
     if (!wallets.length) {
-      await ctx.reply('No tracked wallets yet. Use /trackwallet to add one.');
+      await replyAutoDelete(ctx, 'No tracked wallets yet. Use /trackwallet to add one.');
       return;
     }
 
@@ -115,7 +116,7 @@ export function registerWalletCommand(bot: Bot): void {
       (w) => `• <code>${shortAddr(w.walletAddress!)}</code>${w.label ? ` — ${w.label}` : ''}`
     );
 
-    await ctx.reply(`👛 <b>Tracked Wallets</b>\n\n${lines.join('\n')}\n\nTap to stop tracking:`, {
+    await replyAutoDelete(ctx, `👛 <b>Tracked Wallets</b>\n\n${lines.join('\n')}\n\nTap to stop tracking:`, {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: keyboard },
     });
@@ -136,7 +137,7 @@ export function registerWalletCommand(bot: Bot): void {
       if (wallets.length === 1) {
         address = wallets[0].walletAddress!;
       } else {
-        await ctx.reply(
+        await replyAutoDelete(ctx,
           '💼 <b>Wallet Portfolio</b>\n\nUsage: <code>/portfolio 0x…</code>\n\nShows holdings, floors, and estimated value.',
           { parse_mode: 'HTML' }
         );
@@ -145,13 +146,13 @@ export function registerWalletCommand(bot: Bot): void {
     }
 
     if (!ETH_ADDR.test(address)) {
-      await ctx.reply('❌ That does not look like an Ethereum address. Usage: <code>/portfolio 0x…</code>', {
+      await replyAutoDelete(ctx, '❌ That does not look like an Ethereum address. Usage: <code>/portfolio 0x…</code>', {
         parse_mode: 'HTML',
       });
       return;
     }
 
-    const waitMsg = await ctx.reply('⏳ Scanning wallet holdings...');
+    const waitMsg = await replyAutoDelete(ctx, '⏳ Scanning wallet holdings...');
     const portfolio = await getWalletPortfolio(address.toLowerCase());
     if (!portfolio || portfolio.totalNfts === 0) {
       await ctx.api.editMessageText(

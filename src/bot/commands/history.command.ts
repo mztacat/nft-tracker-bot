@@ -5,6 +5,7 @@ import { getWalletCollectionHistory } from '../../services/providers/transfers.j
 import { getOpenSeaCollection } from '../../services/providers/opensea.enhancer.js';
 import { formatWalletCollectionHistory } from '../../services/formatter/index.js';
 import { parseOpenSeaInput } from '../../utils/opensea-url.js';
+import { replyAutoDelete, scheduleDelete, isGroupChat } from '../../utils/auto-delete.js';
 
 const ETH_ADDR = /^0x[0-9a-fA-F]{40}$/;
 const PAGE_SIZE = 10;
@@ -79,14 +80,14 @@ export function registerHistoryCommand(bot: Bot): void {
   bot.command('history', requireApproved, async (ctx) => {
     const parts = (ctx.match as string).trim().split(/\s+/).filter(Boolean);
     if (parts.length < 2) {
-      await ctx.reply(USAGE, { parse_mode: 'HTML' });
+      await replyAutoDelete(ctx, USAGE, { parse_mode: 'HTML' });
       return;
     }
 
     const [walletArg, collectionArg] = parts;
     const chatId = ctx.chat!.id;
 
-    const walletMsg = await ctx.reply('⏳ Resolving wallet and collection...');
+    const walletMsg = await replyAutoDelete(ctx, '⏳ Resolving wallet and collection...');
 
     const [walletRes, contractRes] = await Promise.all([
       resolveWallet(walletArg!, chatId),
@@ -186,5 +187,9 @@ export function registerHistoryCommand(bot: Bot): void {
       parse_mode: 'HTML',
       reply_markup: keyboard,
     });
+    // Reset the 2-min delete timer from each page flip in group chats
+    if (isGroupChat(ctx) && ctx.chat?.id && ctx.callbackQuery.message?.message_id) {
+      scheduleDelete(ctx.api as any, ctx.chat.id, ctx.callbackQuery.message.message_id);
+    }
   });
 }

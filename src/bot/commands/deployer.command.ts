@@ -3,6 +3,7 @@ import { prisma } from '../../db/client.js';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 import { getContractDeployer } from '../../services/providers/deployer.js';
 import { parseOpenSeaInput } from '../../utils/opensea-url.js';
+import { replyAutoDelete, scheduleDelete, isGroupChat } from '../../utils/auto-delete.js';
 import { getOpenSeaCollection } from '../../services/providers/opensea.enhancer.js';
 
 const ETH_ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -22,21 +23,21 @@ export function registerDeployerCommand(bot: Bot): void {
   bot.command('trackdeployer', requireApproved, async (ctx) => {
     const arg = (ctx.match as string).trim().split(/\s+/)[0] ?? '';
     if (!arg) {
-      await ctx.reply(USAGE, { parse_mode: 'HTML' });
+      await replyAutoDelete(ctx, USAGE, { parse_mode: 'HTML' });
       return;
     }
 
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat!.id) } });
     const dbUser = await prisma.user.findUnique({ where: { telegramId: String(ctx.from!.id) } });
     if (!dbChat || !dbUser) {
-      await ctx.reply('⚠️ Please run /start first.');
+      await replyAutoDelete(ctx, '⚠️ Please run /start first.');
       return;
     }
 
     // Resolve to a contract address — accept full OpenSea URLs too
     const parsed = parseOpenSeaInput(arg);
     if (!parsed) {
-      await ctx.reply(USAGE, { parse_mode: 'HTML' });
+      await replyAutoDelete(ctx, USAGE, { parse_mode: 'HTML' });
       return;
     }
 
@@ -63,14 +64,14 @@ export function registerDeployerCommand(bot: Bot): void {
       }
     }
     if (!contract) {
-      await ctx.reply(
+      await replyAutoDelete(ctx,
         '❌ Give me a contract address (0x…), an OpenSea URL, or the slug of a collection you already track.',
         { parse_mode: 'HTML' }
       );
       return;
     }
 
-    const waitMsg = await ctx.reply('⏳ Looking up the deployer...');
+    const waitMsg = await replyAutoDelete(ctx, '⏳ Looking up the deployer...');
     const deployer = await getContractDeployer(contract);
     if (!deployer) {
       await ctx.api.editMessageText(

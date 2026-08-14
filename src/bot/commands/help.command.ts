@@ -1,6 +1,7 @@
 import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
 import { config } from '../../config/index.js';
+import { replyAutoDelete } from '../../utils/auto-delete.js';
 
 const HELP_TEXT = `
 <b>NFT Lookinto — Commands</b>
@@ -55,6 +56,6 @@ export function registerHelpCommand(bot: Bot): void {
       const user = await prisma.user.findUnique({ where: { telegramId: String(from.id) } });
       isAdmin = user?.isAdmin ?? false;
     }
-    await ctx.reply(isAdmin ? HELP_TEXT + ADMIN_TEXT : HELP_TEXT, { parse_mode: 'HTML' });
+    await replyAutoDelete(ctx, isAdmin ? HELP_TEXT + ADMIN_TEXT : HELP_TEXT, { parse_mode: 'HTML' });
   });
 }

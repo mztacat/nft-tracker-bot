@@ -1,6 +1,7 @@
 import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
 import { parseOpenSeaInput } from '../../utils/opensea-url.js';
+import { replyAutoDelete } from '../../utils/auto-delete.js';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 
 const USAGE =
@@ -18,7 +19,7 @@ export function registerTraitsCommand(bot: Bot): void {
   bot.command('traitalert', requireApproved, async (ctx) => {
     const args = (ctx.match as string).trim();
     if (!args) {
-      await ctx.reply(USAGE, { parse_mode: 'HTML' });
+      await replyAutoDelete(ctx, USAGE, { parse_mode: 'HTML' });
       return;
     }
 
@@ -29,13 +30,13 @@ export function registerTraitsCommand(bot: Bot): void {
     const slug = parsed?.kind === 'slug' ? parsed.value : parsed?.kind === 'address' ? parsed.value : rawSlugArg.toLowerCase().replace(/[.,;:!?]+$/, '');
     const rest = parts.slice(1).join(' ');
     if (!slug || !rest) {
-      await ctx.reply(USAGE, { parse_mode: 'HTML' });
+      await replyAutoDelete(ctx, USAGE, { parse_mode: 'HTML' });
       return;
     }
 
     const dbChat = await prisma.chat.findUnique({ where: { telegramChatId: String(ctx.chat!.id) } });
     if (!dbChat) {
-      await ctx.reply('⚠️ Please run /start first.');
+      await replyAutoDelete(ctx, '⚠️ Please run /start first.');
       return;
     }
 
@@ -43,7 +44,7 @@ export function registerTraitsCommand(bot: Bot): void {
       where: { chatId: dbChat.id, type: 'COLLECTION', collectionSlug: slug, isActive: true },
     });
     if (!item) {
-      await ctx.reply(
+      await replyAutoDelete(ctx,
         `⚠️ You're not tracking <b>${slug}</b> yet.\n\nPaste its OpenSea link and hit 📌 Track Collection first.`,
         { parse_mode: 'HTML' }
       );
@@ -56,20 +57,20 @@ export function registerTraitsCommand(bot: Bot): void {
         where: { trackedItemId: item.id, eventType: 'TRAIT_LISTING' },
         data: { enabled: false },
       });
-      await ctx.reply(`✅ Trait alerts disabled for <b>${slug}</b>.`, { parse_mode: 'HTML' });
+      await replyAutoDelete(ctx, `✅ Trait alerts disabled for <b>${slug}</b>.`, { parse_mode: 'HTML' });
       return;
     }
 
     // Parse Trait=Value (value may contain spaces)
     const eq = rest.indexOf('=');
     if (eq < 1) {
-      await ctx.reply(USAGE, { parse_mode: 'HTML' });
+      await replyAutoDelete(ctx, USAGE, { parse_mode: 'HTML' });
       return;
     }
     const traitType = rest.slice(0, eq).trim();
     const traitValue = rest.slice(eq + 1).trim();
     if (!traitType || !traitValue) {
-      await ctx.reply(USAGE, { parse_mode: 'HTML' });
+      await replyAutoDelete(ctx, USAGE, { parse_mode: 'HTML' });
       return;
     }
 
@@ -92,7 +93,7 @@ export function registerTraitsCommand(bot: Bot): void {
       },
     });
 
-    await ctx.reply(
+    await replyAutoDelete(ctx,
       `✅ Trait alert set for <b>${slug}</b>\n\nYou'll be notified whenever an NFT with <b>${traitType} = ${traitValue}</b> is listed for sale.\n\nTurn off with <code>/traitalert ${slug} off</code>`,
       { parse_mode: 'HTML' }
     );

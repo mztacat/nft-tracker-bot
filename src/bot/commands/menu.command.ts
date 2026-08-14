@@ -1,6 +1,7 @@
 import { Bot } from 'grammy';
 import { prisma } from '../../db/client.js';
 import { config } from '../../config/index.js';
+import { replyAutoDelete } from '../../utils/auto-delete.js';
 
 function buildMainMenuKeyboard(isAdmin: boolean) {
   const rows = [
@@ -60,7 +61,7 @@ export function registerMenuCommand(bot: Bot): void {
     const user = await prisma.user.findUnique({ where: { telegramId: String(from.id) } });
     const isAdmin = String(from.id) === config.OWNER_ID || (user?.isAdmin ?? false);
 
-    await ctx.reply(await buildMenuText(String(ctx.chat!.id)), {
+    await replyAutoDelete(ctx, await buildMenuText(String(ctx.chat!.id)), {
       parse_mode: 'HTML',
       reply_markup: buildMainMenuKeyboard(isAdmin),
     });
