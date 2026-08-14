@@ -7,6 +7,7 @@ import { runAlertWorker } from './workers/alertWorker.js';
 import { runWhaleWorker } from './workers/whaleWorker.js';
 import { runWalletWorker } from './workers/walletWorker.js';
 import { runSnipeWorker } from './workers/snipeWorker.js';
+import { runTraitWorker } from './workers/traitWorker.js';
 import { logger } from './logger.js';
 import { config } from './config/index.js';
 import { createBot } from './bot/index.js';
@@ -68,6 +69,15 @@ async function main() {
       await runSnipeWorker();
     } catch (err) {
       logger.error({ err }, 'Snipe worker cron error');
+    }
+  });
+
+  // Trait listing alerts: every 2 minutes
+  cron.schedule('*/2 * * * *', async () => {
+    try {
+      await runTraitWorker();
+    } catch (err) {
+      logger.error({ err }, 'Trait worker cron error');
     }
   });
 

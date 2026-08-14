@@ -221,6 +221,28 @@ export function formatWalletActivityAlert(params: {
   ].join('\n');
 }
 
+export function formatTraitListingAlert(params: {
+  collectionName: string;
+  traitType: string;
+  traitValue: string;
+  tokenId: string;
+  tokenName?: string | null;
+  price: number | null;
+  url: string;
+}): string {
+  const { collectionName, traitType, traitValue, tokenId, tokenName, price, url } = params;
+  return [
+    `🏷 <b>${escHtml(traitValue)} Listed!</b>`,
+    ``,
+    `Collection  <b>${escHtml(collectionName)}</b>`,
+    `Item  ${tokenName ? escHtml(tokenName) : `#${tokenId}`}`,
+    `Trait  ${escHtml(traitType)} = <b>${escHtml(traitValue)}</b>`,
+    ...(price != null ? [`Price  <b>${price.toFixed(4)} ETH</b>`] : []),
+    ``,
+    `<a href="${url}">View on OpenSea</a>`,
+  ].join('\n');
+}
+
 export function formatSnipeAlert(params: {
   collectionName: string;
   tokenId: string | null;
