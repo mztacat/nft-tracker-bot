@@ -1,4 +1,5 @@
 import { CollectionData, AssetData, ERC721OwnerData, ERC1155HoldersData, CollectionHoldersData } from '../providers/types.js';
+import { fmtEthUsd } from '../../utils/eth-price.js';
 
 function fmt(n: number | null | undefined, decimals = 2): string {
   if (n == null) return 'N/A';
@@ -29,9 +30,9 @@ export function formatCollectionSummary(data: CollectionData): string {
     `<b>${escHtml(data.name)}</b>`,
     `<code>${shortAddr(data.contractAddress ?? '')}</code> · ${data.chain}`,
     ``,
-    data.floorPrice != null ? `Floor  <b>${fmt(data.floorPrice, 4)} ETH</b>` : null,
+    data.floorPrice != null ? `Floor  <b>${fmtEthUsd(data.floorPrice, 4)}</b>` : null,
     data.floorChange24h != null ? `24h  ${fmtChange(data.floorChange24h)}` : null,
-    data.volume24h != null ? `Volume 24h  ${fmt(data.volume24h)} ETH` : null,
+    data.volume24h != null ? `Volume 24h  ${fmtEthUsd(data.volume24h)}` : null,
     data.sales24h != null ? `Sales 24h  ${data.sales24h}` : null,
     data.listingsCount != null ? `Listed  ${data.listingsCount}` : null,
     data.holdersCount != null ? `Holders  ${data.holdersCount}` : null,
@@ -54,9 +55,9 @@ export function formatAssetSummary(data: AssetData): string {
     ``,
     data.ownerAddress ? `Owner  <code>${shortAddr(data.ownerAddress)}</code>` : null,
     `Status  ${data.isListed ? 'Listed' : 'Not listed'}`,
-    data.listingPrice != null ? `Price  <b>${fmt(data.listingPrice, 4)} ETH</b>` : null,
-    data.lastSalePrice != null ? `Last Sale  ${fmt(data.lastSalePrice, 4)} ETH` : null,
-    data.floorPrice != null ? `Floor  ${fmt(data.floorPrice, 4)} ETH` : null,
+    data.listingPrice != null ? `Price  <b>${fmtEthUsd(data.listingPrice, 4)}</b>` : null,
+    data.lastSalePrice != null ? `Last Sale  ${fmtEthUsd(data.lastSalePrice, 4)}` : null,
+    data.floorPrice != null ? `Floor  ${fmtEthUsd(data.floorPrice, 4)}` : null,
     premiumDiscount != null ? `vs Floor  ${fmtChange(premiumDiscount)}` : null,
     data.rarityRank != null ? `Rarity  #${data.rarityRank}` : null,
     ``,
@@ -118,8 +119,8 @@ export function formatAlertFloorChange(collectionName: string, floor: number, pr
     `📊 <b>Floor Change Alert</b>`,
     ``,
     `Collection: <b>${escHtml(collectionName)}</b>`,
-    `Floor: <b>${fmt(floor)} ETH</b>`,
-    `Previous: ${fmt(prev)} ETH`,
+    `Floor: <b>${fmtEthUsd(floor)}</b>`,
+    `Previous: ${fmtEthUsd(prev)}`,
     `Change: <b>${fmtChange(change)}</b>`,
   ].join('\n');
 }
@@ -130,7 +131,7 @@ export function formatAlertSale(collectionName: string, tokenId: string, price: 
     ``,
     `Collection: <b>${escHtml(collectionName)}</b>`,
     `Token: #${tokenId}`,
-    `Price: <b>${fmt(price)} ETH</b>`,
+    `Price: <b>${fmtEthUsd(price)}</b>`,
   ].join('\n');
 }
 
@@ -147,8 +148,8 @@ export function formatDigest(collectionName: string, stats: {
     `📋 <b>${escHtml(collectionName)} Digest — Last Hour</b>`,
     ``,
     `Sales: ${stats.sales}`,
-    `Volume: ${fmt(stats.volume)} ETH`,
-    `Floor: ${fmt(stats.floor)} ETH`,
+    `Volume: ${fmtEthUsd(stats.volume)}`,
+    `Floor: ${fmtEthUsd(stats.floor)}`,
     stats.floorChange != null ? `Floor Change: ${fmtChange(stats.floorChange)}` : null,
     `New Listings: ${stats.newListings}`,
     `Delistings: ${stats.delistings}`,
@@ -246,7 +247,7 @@ export function formatWalletCollectionHistory(params: {
     const icon = t.direction === 'buy' ? '🟢' : '🔴';
     const label = t.direction === 'buy' ? 'Buy' : 'Sell';
     const tokenPart = t.tokenId ? ` #${t.tokenId}` : '';
-    const price = t.ethValue > 0 ? ` · <b>${t.ethValue.toFixed(4)} ETH</b>` : '';
+    const price = t.ethValue > 0 ? ` · <b>${fmtEthUsd(t.ethValue, 4)}</b>` : '';
     const date = t.timestamp
       ? ` · ${t.timestamp.toISOString().replace('T', ' ').slice(0, 16)} UTC`
       : '';
@@ -259,7 +260,7 @@ export function formatWalletCollectionHistory(params: {
     ``,
     `Wallet  <code>${shortAddr(wallet)}</code>${walletLabel ? ` (${escHtml(walletLabel)})` : ''}`,
     `Buys  <b>${buys.length}</b>  ·  Sells  <b>${sells.length}</b>  ·  Est. held  <b>${Math.max(0, heldCount)}</b>`,
-    avgBuy != null ? `Avg buy  <b>${avgBuy.toFixed(4)} ETH</b>  ·  Total spent  <b>${totalSpent.toFixed(4)} ETH</b>` : '',
+    avgBuy != null ? `Avg buy  <b>${fmtEthUsd(avgBuy, 4)}</b>  ·  Total spent  <b>${fmtEthUsd(totalSpent, 4)}</b>` : '',
     ``,
     `<i>Showing ${start + 1}–${Math.min(start + pageSize, txs.length)} of ${txs.length} transactions (newest first)</i>`,
     ``,
@@ -302,7 +303,7 @@ export function formatPortfolio(params: {
   const top = holdings.slice(0, 10);
   const rows = top.map((h) => {
     const value =
-      h.estValueEth != null ? `${h.estValueEth.toFixed(2)} ETH` : '—';
+      h.estValueEth != null ? fmtEthUsd(h.estValueEth, 2) : '—';
     const floor = h.floorEth != null ? ` @ ${h.floorEth.toFixed(3)}` : '';
     return `• <b>${escHtml(h.name)}</b>  ×${h.count}${floor}  →  ${value}`;
   });
@@ -311,7 +312,7 @@ export function formatPortfolio(params: {
     ``,
     `Wallet  <code>${shortAddr(wallet)}</code>${label ? ` (${escHtml(label)})` : ''}`,
     `NFTs  <b>${totalNfts}</b> across <b>${totalCollections}</b> collections`,
-    `Est. value  <b>${totalEstValueEth.toFixed(2)} ETH</b> <i>(floor × count, ${pricedCollections} priced collections)</i>`,
+    `Est. value  <b>${fmtEthUsd(totalEstValueEth, 2)}</b> <i>(floor × count, ${pricedCollections} priced collections)</i>`,
     ``,
     `<b>Top holdings</b>`,
     ...rows,
@@ -342,14 +343,14 @@ export function formatTraitListingAlert(params: {
     `Trait  ${escHtml(traitType)} = <b>${escHtml(traitValue)}</b>`,
   ];
   if (price != null) {
-    lines.push(`Price  <b>${price.toFixed(4)} ETH</b>`);
+    lines.push(`Price  <b>${fmtEthUsd(price, 4)}</b>`);
     if (floor != null && floor > 0) {
-      lines.push(`vs Floor  ${(price / floor).toFixed(2)}x (floor ${floor.toFixed(4)} ETH)`);
+      lines.push(`vs Floor  ${(price / floor).toFixed(2)}x (floor ${fmtEthUsd(floor, 4)})`);
     }
     if (medianPrice != null) {
       const diffPct = ((price - medianPrice) / medianPrice) * 100;
       lines.push(
-        `vs Usual ${escHtml(traitValue)}  ${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}% (median ${medianPrice.toFixed(4)} ETH)`
+        `vs Usual ${escHtml(traitValue)}  ${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}% (median ${fmtEthUsd(medianPrice, 4)})`
       );
     }
   }
@@ -370,8 +371,8 @@ export function formatSnipeAlert(params: {
     `🎯 <b>Listed Below Floor</b>`,
     ``,
     `<b>${escHtml(collectionName)}</b>${tokenId ? ` #${tokenId}` : ''}`,
-    `Price  <b>${fmt(price, 4)} ETH</b>`,
-    `Floor  ${fmt(floor, 4)} ETH  (−${belowPct.toFixed(1)}%)`,
+    `Price  <b>${fmtEthUsd(price, 4)}</b>`,
+    `Floor  ${fmtEthUsd(floor, 4)}  (−${belowPct.toFixed(1)}%)`,
     url ? `\n<a href="${url}">View listing</a>` : null,
   ].filter(Boolean).join('\n');
 }
@@ -403,7 +404,7 @@ export function formatWhaleBuyAlert(params: {
     `Collection: <b>${escHtml(collectionName)}</b>`,
     `Buyer: <code>${shortAddr(buyer)}</code>`,
     `Items: <b>${itemCount}</b> in ${txCount} tx${txCount === 1 ? '' : 's'}`,
-    ethSpent != null && ethSpent > 0 ? `Spent: <b>${fmt(ethSpent)} ETH</b>` : null,
+    ethSpent != null && ethSpent > 0 ? `Spent: <b>${fmtEthUsd(ethSpent)}</b>` : null,
     `Window: last ${windowMinutes} min`,
   ].filter(Boolean).join('\n');
 }

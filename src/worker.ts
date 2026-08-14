@@ -13,11 +13,15 @@ import { logger } from './logger.js';
 import { config } from './config/index.js';
 import { createBot } from './bot/index.js';
 import { initAlertEngine } from './services/alerts/alert.engine.js';
+import { getEthUsdPrice } from './utils/eth-price.js';
 
 async function main() {
   logger.info('Starting NFT Tracker Worker');
 
   await connectDb();
+
+  // Pre-warm ETH/USD price cache used by formatters
+  await getEthUsdPrice().catch(() => {});
 
   // The worker needs a bot instance for sending alerts
   const bot = createBot();
