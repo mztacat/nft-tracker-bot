@@ -4,11 +4,16 @@ import { connectDb, disconnectDb } from './db/client.js';
 import { initAlertEngine } from './services/alerts/alert.engine.js';
 import { logger } from './logger.js';
 import { config } from './config/index.js';
+import { getEthUsdPrice } from './utils/eth-price.js';
 
 async function main() {
   logger.info({ env: config.NODE_ENV }, 'Starting NFT Tracker Bot');
 
   await connectDb();
+
+  // Warm ETH/USD price cache used by formatters; refresh every 5 minutes
+  await getEthUsdPrice().catch(() => {});
+  setInterval(() => { getEthUsdPrice().catch(() => {}); }, 5 * 60 * 1_000);
 
   const bot = createBot();
 
