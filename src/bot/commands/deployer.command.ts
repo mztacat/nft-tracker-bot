@@ -3,6 +3,7 @@ import { prisma } from '../../db/client.js';
 import { requireApproved } from '../middlewares/auth.middleware.js';
 import { getContractDeployer } from '../../services/providers/deployer.js';
 import { parseOpenSeaInput } from '../../utils/opensea-url.js';
+import { getOpenSeaCollection } from '../../services/providers/opensea.enhancer.js';
 
 const ETH_ADDR = /^0x[0-9a-fA-F]{40}$/;
 
@@ -45,12 +46,20 @@ export function registerDeployerCommand(bot: Bot): void {
       contract = parsed.value;
     } else {
       const slug = parsed.value;
+      // 1. Check tracked items first
       const item = await prisma.trackedItem.findFirst({
         where: { chatId: dbChat.id, type: 'COLLECTION', collectionSlug: slug, isActive: true },
       });
       if (item?.contractAddress) {
         contract = item.contractAddress.toLowerCase();
         sourceName = item.label ?? slug;
+      } else {
+        // 2. Fall back to OpenSea API to resolve slug → contract
+        const info = await getOpenSeaCollection(slug);
+        if (info?.contractAddress) {
+          contract = info.contractAddress.toLowerCase();
+          sourceName = info.name;
+        }
       }
     }
     if (!contract) {
